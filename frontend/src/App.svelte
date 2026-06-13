@@ -75,7 +75,7 @@
     <header class="app-header">
         <div class="header-left">
             <span class="logo">⛏ GeoModeler</span>
-            <select bind:value={$currentProject?.id} on:change={(e) => selectProject(e.target.value)}>
+            <select value={$currentProject ? $currentProject.id : ''} on:change={(e) => selectProject(e.target.value)}>
                 {#each projectList as p}
                     <option value={p.id}>{p.name}</option>
                 {/each}
