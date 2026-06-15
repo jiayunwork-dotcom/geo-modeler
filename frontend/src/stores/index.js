@@ -53,6 +53,24 @@ export const wsConnection = writable(null);
 
 export const activeProfileData = writable(null);
 
+export const comparisonMode = writable(false);
+
+export const comparisonLeftProfileId = writable(null);
+
+export const comparisonRightProfileId = writable(null);
+
+export const comparisonLeftData = writable(null);
+
+export const comparisonRightData = writable(null);
+
+export const volumeCardCollapsed = writable(false);
+
+export const volumeCardData = writable(null);
+
+export const boreholeWarnings = writable([]);
+
+export const variogramPreview = writable(null);
+
 export const surfaceOverlay = writable({
     orthoImage: null,
     demImage: null,

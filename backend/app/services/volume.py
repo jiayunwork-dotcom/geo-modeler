@@ -31,3 +31,29 @@ def compute_layer_volume(result_data: dict, lithology_name: str) -> float:
     volume = float(np.sum(thickness) * cell_area)
 
     return volume
+
+
+def compute_all_layer_volumes(result_data: dict) -> list:
+    if not result_data or "surfaces" not in result_data:
+        return []
+
+    lithologies = result_data.get("lithologies", [])
+    results = []
+    total_volume = 0.0
+
+    for litho_name in lithologies:
+        vol = compute_layer_volume(result_data, litho_name)
+        results.append({
+            "lithology_name": litho_name,
+            "volume": round(vol, 2),
+        })
+        total_volume += vol
+
+    for item in results:
+        if total_volume > 0:
+            item["percentage"] = round(item["volume"] / total_volume * 100, 2)
+        else:
+            item["percentage"] = 0.0
+        item["total_volume"] = round(total_volume, 2)
+
+    return results

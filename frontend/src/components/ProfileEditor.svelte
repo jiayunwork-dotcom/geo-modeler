@@ -2,7 +2,9 @@
     import { afterUpdate, tick } from 'svelte';
     import {
         currentProject, boreholes, lithologyTypes, selectedBoreholes, profiles,
-        activeProfileData, addToast
+        activeProfileData, addToast,
+        comparisonMode, comparisonLeftProfileId, comparisonRightProfileId,
+        comparisonLeftData, comparisonRightData
     } from '../stores/index.js';
     import api from '../api/client.js';
 
@@ -266,6 +268,43 @@
             addToast(`导出SVG失败: ${e.message}`, 'error');
         }
     }
+
+    async function loadComparisonProfile(side) {
+        const profileId = side === 'left' ? $comparisonLeftProfileId : $comparisonRightProfileId;
+        if (!profileId) return;
+        try {
+            const data = await api.get(`/projects/profiles/${profileId}/data`);
+            if (side === 'left') {
+                $comparisonLeftData = data;
+            } else {
+                $comparisonRightData = data;
+            }
+        } catch (e) {
+            addToast(`加载对比剖面失败: ${e.message}`, 'error');
+        }
+    }
+
+    async function toggleComparison() {
+        $comparisonMode = !$comparisonMode;
+        if ($comparisonMode) {
+            if ($comparisonLeftProfileId && !$comparisonLeftData) {
+                await loadComparisonProfile('left');
+            }
+            if ($comparisonRightProfileId && !$comparisonRightData) {
+                await loadComparisonProfile('right');
+            }
+        } else {
+            $comparisonLeftData = null;
+            $comparisonRightData = null;
+        }
+    }
+
+    $: if ($comparisonLeftProfileId && $comparisonMode) {
+        loadComparisonProfile('left');
+    }
+    $: if ($comparisonRightProfileId && $comparisonMode) {
+        loadComparisonProfile('right');
+    }
 </script>
 
 <div class="panel-header">
@@ -319,6 +358,36 @@
             {/each}
         </div>
     {/if}
+
+    <hr style="border-color:var(--border);margin:12px 0;" />
+
+    <div class="comparison-section">
+        <label class="checkbox-label">
+            <input type="checkbox" checked={$comparisonMode} on:change={toggleComparison} />
+            剖面对比模式
+        </label>
+
+        {#if $comparisonMode}
+            <div class="form-group" style="margin-top:8px;">
+                <label>左剖面</label>
+                <select bind:value={$comparisonLeftProfileId}>
+                    <option value={null}>选择剖面</option>
+                    {#each $profiles as p}
+                        <option value={p.id}>{p.name}</option>
+                    {/each}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>右剖面</label>
+                <select bind:value={$comparisonRightProfileId}>
+                    <option value={null}>选择剖面</option>
+                    {#each $profiles as p}
+                        <option value={p.id}>{p.name}</option>
+                    {/each}
+                </select>
+            </div>
+        {/if}
+    </div>
 
     {#if profileData}
         <hr style="border-color:var(--border);margin:12px 0;" />
@@ -436,5 +505,11 @@
 
     .annotation-section {
         margin-top: 8px;
+    }
+
+    .comparison-section {
+        background: var(--bg-tertiary);
+        border-radius: 6px;
+        padding: 8px 10px;
     }
 </style>

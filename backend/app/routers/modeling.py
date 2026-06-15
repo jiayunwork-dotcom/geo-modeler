@@ -100,6 +100,66 @@ async def api_compute_volume(
     return {"lithology_name": lithology_name, "volume": volume}
 
 
+@router.post("/modeling/runs/{run_id}/volumes-all")
+async def api_compute_all_volumes(run_id: UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ModelRun).where(ModelRun.id == run_id))
+    model_run = result.scalar_one_or_none()
+    if not model_run or model_run.status != "completed":
+        raise HTTPException(400, "建模尚未完成")
+
+    from app.services.volume import compute_all_layer_volumes
+    return compute_all_layer_volumes(model_run.result_data)
+
+
+@router.post("/modeling/variogram-preview")
+async def api_variogram_preview(data: dict):
+    import numpy as np
+    from app.services.krige import MODEL_FUNCS, compute_experimental_variogram
+
+    model_type = data.get("model_type", "spherical")
+    range_ = data.get("range_param", None)
+    sill = data.get("sill_param", None)
+    nugget = data.get("nugget_param", None)
+    coords_data = data.get("coords", [])
+    values_data = data.get("values", [])
+
+    if not coords_data or not values_data or len(coords_data) != len(values_data):
+        raise HTTPException(400, "需要有效的坐标和值数据")
+
+    coords = np.array(coords_data)
+    values = np.array(values_data)
+
+    lag_centers, gamma, counts = compute_experimental_variogram(coords, values)
+
+    if range_ is None or sill is None or nugget is None:
+        from app.services.krige import fit_variogram
+        r, s, n = fit_variogram(
+            lag_centers, gamma, model_type,
+            initial_range=range_, initial_sill=sill, initial_nugget=nugget,
+        )
+        if range_ is None:
+            range_ = r
+        if sill is None:
+            sill = s
+        if nugget is None:
+            nugget = n
+
+    model_func = MODEL_FUNCS.get(model_type, MODEL_FUNCS["spherical"])
+    h_fine = np.linspace(0, float(np.max(lag_centers)) if len(lag_centers) > 0 else 1, 100)
+    model_values = model_func(h_fine, nugget, sill, range_)
+
+    return {
+        "experimental_lags": lag_centers.tolist(),
+        "experimental_gamma": gamma.tolist(),
+        "model_type": model_type,
+        "range": float(range_),
+        "sill": float(sill),
+        "nugget": float(nugget),
+        "model_h": h_fine.tolist(),
+        "model_gamma": model_values.tolist(),
+    }
+
+
 async def _run_modeling_task(run_id: str, project_id: str, boreholes, params: ModelRunCreate):
     async with async_session() as db:
         result = await db.execute(select(ModelRun).where(ModelRun.id == run_id))

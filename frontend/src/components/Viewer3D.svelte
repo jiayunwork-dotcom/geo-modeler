@@ -3,13 +3,16 @@
     import {
         currentProject, boreholes, lithologyTypes, activeModelResult,
         layerVisibility, layerOpacity, clipPlane, volumeResult, addToast,
-        attributeField, attributeRendering, surfaceOverlay
+        attributeField, attributeRendering, surfaceOverlay,
+        boreholeWarnings, volumeCardData, volumeCardCollapsed
     } from '../stores/index.js';
+    import api from '../api/client.js';
 
     let container;
     let scene, camera, renderer, controls;
     let layerMeshes = {};
     let boreholeMeshes = [];
+    let warningMeshes = [];
     let clipPlaneObj = null;
     let attributeMesh = null;
     let surfaceMesh = null;
@@ -55,6 +58,7 @@
         const unsubBoreholes = boreholes.subscribe(v => {
             if (sceneReady && v && v.length > 0) {
                 updateBoreholeCylinders(v);
+                updateWarningBoxes();
             }
         });
 
@@ -104,6 +108,12 @@
             }
         });
 
+        const unsubWarnings = boreholeWarnings.subscribe(() => {
+            if (sceneReady) {
+                updateWarningBoxes();
+            }
+        });
+
         return () => {
             unsubBoreholes();
             unsubModel();
@@ -113,6 +123,7 @@
             unsubAttr();
             unsubAttrRendering();
             unsubOverlay();
+            unsubWarnings();
             cancelAnimationFrame(animationId);
             renderer?.dispose();
         };
@@ -183,6 +194,74 @@
         animationId = requestAnimationFrame(animate);
         controls?.update();
         renderer?.render(scene, camera);
+    }
+
+    function getBoreholePosition(bh) {
+        const bhs = $boreholes;
+        if (!bhs || bhs.length === 0) return null;
+        const coords = bhs.map(b => [b.longitude, b.latitude]);
+        const lonMin = Math.min(...coords.map(c => c[0]));
+        const latMin = Math.min(...coords.map(c => c[1]));
+        const x = (bh.longitude - lonMin) * 111320 * Math.cos(bh.latitude * Math.PI / 180);
+        const z = (bh.latitude - latMin) * 111320;
+        return { x, z };
+    }
+
+    function updateWarningBoxes() {
+        warningMeshes.forEach(m => { disposeMesh(m); });
+        warningMeshes = [];
+
+        const bhs = $boreholes;
+        if (!bhs || bhs.length < 2) return;
+
+        const coords = bhs.map(b => [b.longitude, b.latitude]);
+        const spacings = [];
+        for (let i = 1; i < bhs.length; i++) {
+            const d = Math.sqrt(
+                Math.pow((bhs[i].longitude - bhs[i-1].longitude) * 111320 * Math.cos(bhs[i].latitude * Math.PI / 180), 2) +
+                Math.pow((bhs[i].latitude - bhs[i-1].latitude) * 111320, 2)
+            );
+            spacings.push(d);
+        }
+        const avgSpacing = spacings.reduce((a, b) => a + b, 0) / spacings.length;
+
+        for (let i = 0; i < spacings.length; i++) {
+            if (spacings[i] > avgSpacing * 2) {
+                const pos1 = getBoreholePosition(bhs[i]);
+                const pos2 = getBoreholePosition(bhs[i + 1]);
+                if (!pos1 || !pos2) continue;
+
+                const cx = (pos1.x + pos2.x) / 2;
+                const cz = (pos1.z + pos2.z) / 2;
+                const w = Math.abs(pos2.x - pos1.x) || 5;
+                const d = Math.abs(pos2.z - pos1.z) || 5;
+                const h = 50;
+
+                const geo = new THREE.BoxGeometry(w + 4, h, d + 4);
+                const mat = new THREE.MeshBasicMaterial({
+                    color: 0xff3333,
+                    transparent: true,
+                    opacity: 0.15,
+                    side: THREE.DoubleSide,
+                    depthWrite: false,
+                });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(cx, bhs[i].elevation - h / 2, cz);
+                scene.add(mesh);
+                warningMeshes.push(mesh);
+
+                const edges = new THREE.EdgesGeometry(geo);
+                const lineMat = new THREE.LineBasicMaterial({
+                    color: 0xff3333,
+                    transparent: true,
+                    opacity: 0.6,
+                });
+                const line = new THREE.LineSegments(edges, lineMat);
+                line.position.copy(mesh.position);
+                scene.add(line);
+                warningMeshes.push(line);
+            }
+        }
     }
 
     function updateBoreholeCylinders(bhs) {
@@ -555,6 +634,24 @@
             scene.add(mesh);
         }
     }
+
+    async function loadVolumeCard() {
+        if (!$activeModelResult || !$modelingProgress?.runId) return;
+        try {
+            const data = await api.post(`/projects/modeling/runs/${$modelingProgress?.runId}/volumes-all`);
+            $volumeCardData = data;
+        } catch (e) {
+            console.warn('加载体积卡片失败:', e);
+        }
+    }
+
+    let modelingProgress;
+    import { modelingProgress as mpStore } from '../stores/index.js';
+    mpStore.subscribe(v => { modelingProgress = v; });
+
+    $: if ($activeModelResult && !$volumeCardData) {
+        loadVolumeCard();
+    }
 </script>
 
 <div class="viewer-container" bind:this={container}>
@@ -563,6 +660,32 @@
             <div class="empty-icon">⛏</div>
             <h3>GeoModeler 三维地质可视化</h3>
             <p>导入钻孔数据后开始三维建模与可视化分析</p>
+        </div>
+    {/if}
+
+    {#if $volumeCardData && $volumeCardData.length > 0}
+        <div class="volume-card" class:collapsed={$volumeCardCollapsed}>
+            <div class="volume-card-header" on:click={() => $volumeCardCollapsed = !$volumeCardCollapsed}>
+                <span class="volume-card-title">体积估算</span>
+                <span class="volume-card-toggle">{$volumeCardCollapsed ? '▸' : '▾'}</span>
+            </div>
+            {#if !$volumeCardCollapsed}
+                <div class="volume-card-body">
+                    {#each $volumeCardData as item}
+                        <div class="volume-card-row">
+                            <span class="volume-color-swatch" style="background:{$lithologyTypes?.find(l => l.name === item.lithology_name)?.color || '#888'}"></span>
+                            <span class="volume-name">{item.lithology_name}</span>
+                            <span class="volume-value">{item.volume.toFixed(2)} m³</span>
+                            <span class="volume-percent">{item.percentage.toFixed(2)}%</span>
+                        </div>
+                    {/each}
+                    {#if $volumeCardData.length > 0}
+                        <div class="volume-card-total">
+                            总体积: {$volumeCardData[0].total_volume.toFixed(2)} m³
+                        </div>
+                    {/if}
+                </div>
+            {/if}
         </div>
     {/if}
 </div>
@@ -599,5 +722,96 @@
 
     .viewer-empty p {
         font-size: 13px;
+    }
+
+    .volume-card {
+        position: absolute;
+        bottom: 16px;
+        right: 16px;
+        background: rgba(26, 29, 35, 0.92);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        min-width: 240px;
+        max-width: 320px;
+        z-index: 10;
+        backdrop-filter: blur(8px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+
+    .volume-card.collapsed {
+        min-width: auto;
+    }
+
+    .volume-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 14px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .volume-card-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .volume-card-toggle {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .volume-card-body {
+        padding: 8px 12px;
+        max-height: 260px;
+        overflow-y: auto;
+    }
+
+    .volume-card-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 0;
+        font-size: 12px;
+    }
+
+    .volume-color-swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        flex-shrink: 0;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .volume-name {
+        flex: 1;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .volume-value {
+        color: var(--text-primary);
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .volume-percent {
+        color: var(--text-muted);
+        font-size: 11px;
+        min-width: 44px;
+        text-align: right;
+    }
+
+    .volume-card-total {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px solid var(--border);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent);
+        text-align: center;
     }
 </style>

@@ -2,7 +2,8 @@
     import { onMount } from 'svelte';
     import {
         currentProject, boreholes, lithologyTypes, profiles,
-        modelRuns, toasts, activeTab, activeProfileData, addToast
+        modelRuns, toasts, activeTab, activeProfileData, addToast,
+        comparisonMode, comparisonLeftData, comparisonRightData
     } from './stores/index.js';
     import api from './api/client.js';
     import BoreholeManager from './components/BoreholeManager.svelte';
@@ -120,7 +121,7 @@
         </aside>
 
         <main class="main-content">
-            {#if $activeTab === 'profiles' && $activeProfileData}
+            {#if $activeTab === 'profiles' && ($activeProfileData || ($comparisonMode && $comparisonLeftData && $comparisonRightData))}
                 <ProfileCanvas />
             {:else}
                 <Viewer3D />
