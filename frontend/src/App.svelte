@@ -15,6 +15,10 @@
     import ExportPanel from './components/ExportPanel.svelte';
     import SurfaceOverlay from './components/SurfaceOverlay.svelte';
     import Toast from './components/Toast.svelte';
+    import WaterLevelPanel from './components/WaterLevelPanel.svelte';
+    import WaterLevelAnalysis from './components/WaterLevelAnalysis.svelte';
+    import WaterLevelContour from './components/WaterLevelContour.svelte';
+    import WaterLevelPlayback from './components/WaterLevelPlayback.svelte';
 
     let projectList = [];
     let showNewProject = false;
@@ -69,7 +73,8 @@
         { id: 'boreholes', label: '钻孔数据', icon: '⊕' },
         { id: 'profiles', label: '剖面分析', icon: '☷' },
         { id: 'modeling', label: '三维建模', icon: '◆' },
-        { id: 'attributes', label: '属性场', icon: '◈' },
+        { id: 'waterlevel', label: '地下水位', icon: '◈' },
+        { id: 'attributes', label: '属性场', icon: '◇' },
         { id: 'export', label: '成果导出', icon: '↓' },
     ];
 </script>
@@ -109,6 +114,8 @@
                 <ProfileEditor />
             {:else if $activeTab === 'modeling'}
                 <ModelingPanel />
+            {:else if $activeTab === 'waterlevel'}
+                <WaterLevelPanel />
             {:else if $activeTab === 'attributes'}
                 <AttributePanel />
             {:else if $activeTab === 'export'}
@@ -117,7 +124,15 @@
 
             <div class="divider" />
 
-            <SurfaceOverlay />
+            {#if $activeTab === 'waterlevel'}
+                <WaterLevelAnalysis />
+                <div class="divider" />
+                <WaterLevelContour />
+                <div class="divider" />
+                <WaterLevelPlayback />
+            {:else}
+                <SurfaceOverlay />
+            {/if}
         </aside>
 
         <main class="main-content">

@@ -60,4 +60,31 @@ export default {
         a.href = url; a.download = filename; a.click();
         URL.revokeObjectURL(url);
     },
+
+    getWaterLevels: (projectId, boreholeId) => {
+        const params = boreholeId ? `?borehole_id=${boreholeId}` : '';
+        return request('GET', `/projects/${projectId}/water-levels${params}`);
+    },
+
+    createWaterLevel: (projectId, data) => request('POST', `/projects/${projectId}/water-levels`, data),
+
+    deleteWaterLevel: (projectId, waterLevelId) => request('DELETE', `/projects/${projectId}/water-levels/${waterLevelId}`),
+
+    importWaterLevelCsv: (projectId, file) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        return request('POST', `/projects/${projectId}/water-levels/import-csv`, fd);
+    },
+
+    getWaterLevelStats: (projectId, boreholeIds) =>
+        request('POST', `/projects/${projectId}/water-levels/statistics`, boreholeIds),
+
+    getWaterLevelMKTest: (projectId, boreholeIds) =>
+        request('POST', `/projects/${projectId}/water-levels/mk-test`, boreholeIds),
+
+    getWaterLevelBoxplot: (projectId, boreholeIds) =>
+        request('POST', `/projects/${projectId}/water-levels/boxplot`, boreholeIds),
+
+    krigingWaterLevel: (projectId, data) =>
+        request('POST', `/projects/${projectId}/water-levels/kriging`, data),
 };

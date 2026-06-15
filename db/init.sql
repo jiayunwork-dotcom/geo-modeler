@@ -87,3 +87,17 @@ CREATE INDEX idx_boreholes_project ON boreholes(project_id);
 CREATE INDEX idx_borehole_layers_borehole ON borehole_layers(borehole_id);
 CREATE INDEX idx_lithology_project ON lithology_types(project_id);
 CREATE INDEX idx_model_runs_project ON model_runs(project_id);
+
+CREATE TABLE IF NOT EXISTS water_levels (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    borehole_id UUID NOT NULL REFERENCES boreholes(id) ON DELETE CASCADE,
+    obs_date DATE NOT NULL,
+    water_level DOUBLE PRECISION NOT NULL,
+    water_temp DOUBLE PRECISION,
+    conductivity DOUBLE PRECISION,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(borehole_id, obs_date)
+);
+
+CREATE INDEX idx_water_levels_borehole ON water_levels(borehole_id);
+CREATE INDEX idx_water_levels_date ON water_levels(obs_date);

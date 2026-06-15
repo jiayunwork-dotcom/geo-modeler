@@ -2,7 +2,7 @@
     import { onMount } from 'svelte';
     import {
         currentProject, boreholes, lithologyTypes, selectedBoreholes,
-        editingBorehole, addToast
+        editingBorehole, waterLevelData, addToast
     } from '../stores/index.js';
     import api from '../api/client.js';
 
@@ -11,12 +11,27 @@
     let importing = false;
     let importResult = null;
     let showColorEditor = false;
+    let detailBoreholeId = null;
+    let detailCanvas;
+    let wlByBorehole = {};
+
+    $: {
+        const map = {};
+        $waterLevelData.forEach(r => {
+            if (!map[r.borehole_id]) map[r.borehole_id] = [];
+            map[r.borehole_id].push(r);
+        });
+        wlByBorehole = map;
+    }
 
     async function refreshBoreholes() {
         if (!$currentProject) return;
         try {
             $boreholes = await api.get(`/projects/${$currentProject.id}/boreholes`);
             $lithologyTypes = await api.get(`/projects/${$currentProject.id}/lithology-types`);
+            try {
+                $waterLevelData = await api.getWaterLevels($currentProject.id);
+            } catch (e) { /* ignore */ }
         } catch (e) {
             addToast(`刷新失败: ${e.message}`, 'error');
         }
@@ -145,6 +160,7 @@
                         <span>坐标: {bh.longitude.toFixed(5)}, {bh.latitude.toFixed(5)}</span>
                         <span>高程: {bh.elevation.toFixed(2)}m</span>
                         <span>{bh.layers.length} 层</span>
+                        <span class="wl-count">{(wlByBorehole[bh.id] || []).length} 条水位</span>
                     </div>
                     <div class="layer-bar">
                         {#each bh.layers as layer}
@@ -338,5 +354,9 @@
     .layers-table input {
         font-size: 12px;
         padding: 3px 6px;
+    }
+
+    .wl-count {
+        color: var(--accent, #4fc3f7);
     }
 </style>

@@ -4,7 +4,9 @@
         currentProject, boreholes, lithologyTypes, activeModelResult,
         layerVisibility, layerOpacity, clipPlane, volumeResult, addToast,
         attributeField, attributeRendering, surfaceOverlay,
-        boreholeWarnings, volumeCardData, volumeCardCollapsed
+        boreholeWarnings, volumeCardData, volumeCardCollapsed,
+        waterLevelContourResult, waterLevelContourVisible, waterLevelContourOpacity,
+        waterLevelIntersectionLine
     } from '../stores/index.js';
     import api from '../api/client.js';
 
@@ -16,6 +18,8 @@
     let clipPlaneObj = null;
     let attributeMesh = null;
     let surfaceMesh = null;
+    let waterLevelMesh = null;
+    let intersectionLineMesh = null;
     let animationId;
     let sceneReady = false;
 
@@ -114,6 +118,30 @@
             }
         });
 
+        const unsubWLContour = waterLevelContourResult.subscribe(() => {
+            if (sceneReady) {
+                updateWaterLevelSurface();
+            }
+        });
+
+        const unsubWLVisible = waterLevelContourVisible.subscribe(() => {
+            if (sceneReady && waterLevelMesh) {
+                waterLevelMesh.visible = $waterLevelContourVisible;
+            }
+        });
+
+        const unsubWLOpacity = waterLevelContourOpacity.subscribe(() => {
+            if (sceneReady && waterLevelMesh) {
+                waterLevelMesh.material.opacity = $waterLevelContourOpacity;
+            }
+        });
+
+        const unsubWLIntersect = waterLevelIntersectionLine.subscribe(() => {
+            if (sceneReady) {
+                updateIntersectionLine();
+            }
+        });
+
         return () => {
             unsubBoreholes();
             unsubModel();
@@ -124,6 +152,10 @@
             unsubAttrRendering();
             unsubOverlay();
             unsubWarnings();
+            unsubWLContour();
+            unsubWLVisible();
+            unsubWLOpacity();
+            unsubWLIntersect();
             cancelAnimationFrame(animationId);
             renderer?.dispose();
         };
@@ -643,6 +675,148 @@
         } catch (e) {
             console.warn('加载体积卡片失败:', e);
         }
+    }
+
+    function getSceneCoordFromLonLat(lon, lat, elev) {
+        const bhs = $boreholes;
+        if (!bhs || bhs.length === 0) return null;
+        const lonMin = Math.min(...bhs.map(b => b.longitude));
+        const latMin = Math.min(...bhs.map(b => b.latitude));
+        const refLat = bhs[0].latitude;
+        const x = (lon - lonMin) * 111320 * Math.cos(refLat * Math.PI / 180);
+        const z = (lat - latMin) * 111320;
+        return { x, y: elev, z };
+    }
+
+    function wlValueToColor(v, vmin, vmax) {
+        const t = vmax > vmin ? Math.max(0, Math.min(1, (v - vmin) / (vmax - vmin))) : 0.5;
+        const r = Math.min(1, t * 2);
+        const g = t < 0.5 ? t * 1.5 : (1 - t) * 1.5;
+        const b = Math.max(0, 1 - t * 2);
+        return [r, g, b];
+    }
+
+    function updateWaterLevelSurface() {
+        if (waterLevelMesh) {
+            disposeMesh(waterLevelMesh);
+            waterLevelMesh = null;
+        }
+
+        const contour = $waterLevelContourResult;
+        if (!contour?.water_level_grid) return;
+
+        const grid = contour.grid;
+        const nx = grid.nx;
+        const ny = grid.ny;
+        const wlGrid = contour.water_level_grid;
+        const wlMin = contour.water_level_min;
+        const wlMax = contour.water_level_max;
+
+        const bhs = $boreholes;
+        if (!bhs || bhs.length === 0) return;
+
+        const lonMin = grid.lon_min;
+        const latMin = grid.lat_min;
+        const lonRange = grid.lon_max - lonMin;
+        const latRange = grid.lat_max - latMin;
+        const refLat = bhs[0].latitude;
+
+        const size = 100;
+        const vertices = [];
+        const colors = [];
+        const indices = [];
+
+        for (let j = 0; j < ny; j++) {
+            for (let i = 0; i < nx; i++) {
+                const lonFrac = nx > 1 ? i / (nx - 1) : 0.5;
+                const latFrac = ny > 1 ? j / (ny - 1) : 0.5;
+                const lon = lonMin + lonFrac * lonRange;
+                const lat = latMin + latFrac * latRange;
+                const wl = wlGrid[j]?.[i] ?? (wlMin + wlMax) / 2;
+
+                const pos = getSceneCoordFromLonLat(lon, lat, wl);
+                if (!pos) continue;
+
+                vertices.push(pos.x, pos.y, pos.z);
+
+                const rgb = wlValueToColor(wl, wlMin, wlMax);
+                colors.push(rgb[0], rgb[1], rgb[2]);
+            }
+        }
+
+        for (let j = 0; j < ny - 1; j++) {
+            for (let i = 0; i < nx - 1; i++) {
+                const idx0 = j * nx + i;
+                const idx1 = j * nx + i + 1;
+                const idx2 = (j + 1) * nx + i;
+                const idx3 = (j + 1) * nx + i + 1;
+
+                indices.push(idx0, idx2, idx1);
+                indices.push(idx1, idx2, idx3);
+            }
+        }
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+
+        const mat = new THREE.MeshPhongMaterial({
+            vertexColors: true,
+            transparent: true,
+            opacity: $waterLevelContourOpacity,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+        });
+
+        waterLevelMesh = new THREE.Mesh(geo, mat);
+        waterLevelMesh.visible = $waterLevelContourVisible;
+        waterLevelMesh.renderOrder = 10;
+        scene.add(waterLevelMesh);
+    }
+
+    function updateIntersectionLine() {
+        if (intersectionLineMesh) {
+            disposeMesh(intersectionLineMesh);
+            intersectionLineMesh = null;
+        }
+
+        const points = $waterLevelIntersectionLine;
+        if (!points || points.length < 2) return;
+
+        const bhs = $boreholes;
+        if (!bhs || bhs.length === 0) return;
+
+        points.sort((a, b) => {
+            const da = (a.longitude - bhs[0].longitude) ** 2 + (a.latitude - bhs[0].latitude) ** 2;
+            const db = (b.longitude - bhs[0].longitude) ** 2 + (b.latitude - bhs[0].latitude) ** 2;
+            return da - db;
+        });
+
+        const positions = [];
+        for (const p of points) {
+            const pos = getSceneCoordFromLonLat(p.longitude, p.latitude, p.elevation);
+            if (pos) {
+                positions.push(pos.x, pos.y, pos.z);
+            }
+        }
+
+        if (positions.length < 6) return;
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+
+        const mat = new THREE.LineBasicMaterial({
+            color: 0xffffff,
+            linewidth: 2,
+            transparent: true,
+            opacity: 0.9,
+        });
+
+        intersectionLineMesh = new THREE.Line(geo, mat);
+        intersectionLineMesh.renderOrder = 20;
+        scene.add(intersectionLineMesh);
     }
 
     let modelingProgress;

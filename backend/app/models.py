@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, date
 from sqlalchemy import (
-    Column, String, Text, Integer, Float, DateTime, ForeignKey, UniqueConstraint, JSON, ARRAY
+    Column, String, Text, Integer, Float, DateTime, Date, ForeignKey, UniqueConstraint, JSON, ARRAY
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
@@ -50,6 +50,8 @@ class Borehole(Base):
     project = relationship("Project", back_populates="boreholes")
     layers = relationship("BoreholeLayer", back_populates="borehole", cascade="all, delete-orphan",
                           order_by="BoreholeLayer.layer_no")
+    water_levels = relationship("WaterLevel", back_populates="borehole", cascade="all, delete-orphan",
+                                order_by="WaterLevel.obs_date")
 
     __table_args__ = (UniqueConstraint("project_id", "hole_id"),)
 
@@ -119,3 +121,18 @@ class ModelRun(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
     project = relationship("Project", back_populates="model_runs")
+
+
+class WaterLevel(Base):
+    __tablename__ = "water_levels"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    borehole_id = Column(UUID(as_uuid=True), ForeignKey("boreholes.id", ondelete="CASCADE"), nullable=False)
+    obs_date = Column(Date, nullable=False)
+    water_level = Column(Float, nullable=False)
+    water_temp = Column(Float, nullable=True)
+    conductivity = Column(Float, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+    borehole = relationship("Borehole", back_populates="water_levels")
+
+    __table_args__ = (UniqueConstraint("borehole_id", "obs_date"),)

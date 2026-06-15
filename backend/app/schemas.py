@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, date
 
 
 class LithologyTypeBase(BaseModel):
@@ -188,3 +188,63 @@ class LayerStatsOut(BaseModel):
     thickness_max: float
     area: float
     volume: float
+
+
+class WaterLevelBase(BaseModel):
+    obs_date: date
+    water_level: float
+    water_temp: Optional[float] = None
+    conductivity: Optional[float] = None
+
+
+class WaterLevelCreate(WaterLevelBase):
+    borehole_id: UUID
+
+
+class WaterLevelOut(WaterLevelBase):
+    id: UUID
+    borehole_id: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class WaterLevelCSVImportResult(BaseModel):
+    imported: int
+    errors: List[str]
+    warnings: List[str]
+
+
+class WaterLevelStatsOut(BaseModel):
+    borehole_id: UUID
+    hole_id: str
+    count: int
+    mean: Optional[float] = None
+    median: Optional[float] = None
+    std_dev: Optional[float] = None
+    cv: Optional[float] = None
+    max_rise_days: Optional[int] = None
+    max_fall_days: Optional[int] = None
+    annual_amplitude: Optional[float] = None
+
+
+class MKTestResult(BaseModel):
+    borehole_id: UUID
+    hole_id: str
+    count: int
+    s_stat: Optional[float] = None
+    var_s: Optional[float] = None
+    z_value: Optional[float] = None
+    p_value: Optional[float] = None
+    trend: str
+    trend_icon: str
+
+
+class WaterLevelKrigingRequest(BaseModel):
+    obs_date: Optional[date] = None
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+    variogram_model: str = "spherical"
+    grid_nx: int = Field(50, ge=5, le=100)
+    grid_ny: int = Field(50, ge=5, le=100)

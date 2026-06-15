@@ -78,3 +78,30 @@ export const surfaceOverlay = writable({
     visible: true,
 });
 
+export const waterLevelData = writable([]);
+
+export const waterLevelStats = writable([]);
+
+export const waterLevelMKResults = writable([]);
+
+export const waterLevelBoxplot = writable([]);
+
+export const waterLevelContourResult = writable(null);
+
+export const waterLevelContourVisible = writable(false);
+
+export const waterLevelContourOpacity = writable(0.6);
+
+export const waterLevelIntersectionLine = writable(null);
+
+export const waterLevelPlaybackState = writable({
+    playing: false,
+    startDate: null,
+    endDate: null,
+    speed: 7,
+    currentDate: null,
+    progress: 0,
+});
+
+export const waterLevelSubTab = writable('data');
+
