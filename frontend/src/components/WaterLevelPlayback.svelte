@@ -14,20 +14,10 @@
     let animFrameId = null;
     let lastFrameTime = 0;
     let cacheFrames = [];
-    let cacheIdx = 0;
 
-    $: dateList = (() => {
-        if (!startDate || !endDate) return [];
-        const dates = [];
-        const s = new Date(startDate);
-        const e = new Date(endDate);
-        const current = new Date(s);
-        while (current <= e) {
-            dates.push(new Date(current));
-            current.setDate(current.getDate() + 1);
-        }
-        return dates;
-    })();
+    let interpT = 0;
+    let currentFrameIdx = 0;
+    let msPerDay = 1000 / speed;
 
     function getUniqueDates() {
         const dates = new Set();
@@ -38,6 +28,46 @@
             }
         });
         return Array.from(dates).sort();
+    }
+
+    function interpolateGrids(gridA, gridB, t) {
+        if (!gridA || !gridB) return gridA || gridB;
+        const ny = gridA.length;
+        if (ny === 0) return gridA;
+        const nx = gridA[0].length;
+        const result = [];
+        for (let j = 0; j < ny; j++) {
+            const row = [];
+            for (let i = 0; i < nx; i++) {
+                const a = gridA[j]?.[i] ?? 0;
+                const b = gridB[j]?.[i] ?? 0;
+                row.push(a + (b - a) * t);
+            }
+            result.push(row);
+        }
+        return result;
+    }
+
+    function interpolateResults(frameA, frameB, t) {
+        const rA = frameA.result;
+        const rB = frameB.result;
+        const wlGrid = interpolateGrids(rA.water_level_grid, rB.water_level_grid, t);
+        const wlMinA = rA.water_level_min;
+        const wlMaxA = rA.water_level_max;
+        const wlMinB = rB.water_level_min;
+        const wlMaxB = rB.water_level_max;
+        return {
+            grid: rA.grid,
+            water_level_grid: wlGrid,
+            variance_grid: rA.variance_grid,
+            water_level_min: wlMinA + (wlMinB - wlMinA) * t,
+            water_level_max: wlMaxA + (wlMaxB - wlMaxA) * t,
+        };
+    }
+
+    function dateToDateStr(d) {
+        const dt = new Date(d);
+        return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
     }
 
     async function startPlayback() {
@@ -52,9 +82,8 @@
         playing = true;
         progress = 0;
         cacheFrames = [];
-        cacheIdx = 0;
-
-        const frameInterval = Math.max(16, Math.min(100, 1000 / (speed * 1.5)));
+        currentFrameIdx = 0;
+        interpT = 0;
 
         const step = Math.max(1, Math.floor(dates.length / 300));
         const sampledDates = dates.filter((_, i) => i % step === 0 || i === dates.length - 1);
@@ -69,6 +98,7 @@
                 });
                 cacheFrames.push({
                     date: sampledDates[i],
+                    dateMs: new Date(sampledDates[i]).getTime(),
                     result: result,
                 });
             } catch (e) {
@@ -76,12 +106,13 @@
             }
         }
 
-        if (cacheFrames.length === 0) {
+        if (cacheFrames.length < 2) {
             playing = false;
-            addToast('无法生成回放帧', 'error');
+            addToast('无法生成足够的回放帧', 'error');
             return;
         }
 
+        msPerDay = 1000 / speed;
         lastFrameTime = performance.now();
         animatePlayback();
     }
@@ -90,25 +121,58 @@
         if (!playing) return;
 
         const now = performance.now();
-        const elapsed = now - lastFrameTime;
-        const frameInterval = Math.max(16, Math.min(100, 1000 / (speed * 1.5)));
+        const dt = now - lastFrameTime;
+        lastFrameTime = now;
 
-        if (elapsed >= frameInterval) {
-            lastFrameTime = now;
+        const simDaysElapsed = dt / msPerDay;
 
-            if (cacheIdx < cacheFrames.length) {
-                const frame = cacheFrames[cacheIdx];
-                $waterLevelContourResult = frame.result;
-                $waterLevelContourVisible = true;
-                currentDateDisplay = frame.date;
-                progress = ((cacheIdx + 1) / cacheFrames.length) * 100;
-                cacheIdx++;
-            } else {
-                playing = false;
-                addToast('回放完成', 'info');
-                return;
-            }
+        const curFrame = cacheFrames[currentFrameIdx];
+        const nextIdx = currentFrameIdx + 1;
+
+        if (nextIdx >= cacheFrames.length) {
+            playing = false;
+            progress = 100;
+            $waterLevelContourResult = curFrame.result;
+            $waterLevelContourVisible = true;
+            currentDateDisplay = curFrame.date;
+            addToast('回放完成', 'info');
+            return;
         }
+
+        const nextFrame = cacheFrames[nextIdx];
+        const daySpan = (nextFrame.dateMs - curFrame.dateMs) / (1000 * 60 * 60 * 24);
+        const tStep = daySpan > 0 ? simDaysElapsed / daySpan : 1;
+
+        interpT += tStep;
+
+        while (interpT >= 1 && currentFrameIdx + 1 < cacheFrames.length) {
+            interpT -= 1;
+            currentFrameIdx++;
+        }
+
+        if (currentFrameIdx + 1 >= cacheFrames.length) {
+            playing = false;
+            progress = 100;
+            $waterLevelContourResult = cacheFrames[cacheFrames.length - 1].result;
+            $waterLevelContourVisible = true;
+            currentDateDisplay = cacheFrames[cacheFrames.length - 1].date;
+            addToast('回放完成', 'info');
+            return;
+        }
+
+        const clampedT = Math.max(0, Math.min(1, interpT));
+        const interpolated = interpolateResults(cacheFrames[currentFrameIdx], cacheFrames[currentFrameIdx + 1], clampedT);
+        $waterLevelContourResult = interpolated;
+        $waterLevelContourVisible = true;
+
+        const curDateMs = cacheFrames[currentFrameIdx].dateMs;
+        const nextDateMs = cacheFrames[currentFrameIdx + 1].dateMs;
+        const displayMs = curDateMs + (nextDateMs - curDateMs) * clampedT;
+        currentDateDisplay = dateToDateStr(displayMs);
+
+        const totalSpan = cacheFrames[cacheFrames.length - 1].dateMs - cacheFrames[0].dateMs;
+        const elapsed = displayMs - cacheFrames[0].dateMs;
+        progress = totalSpan > 0 ? (elapsed / totalSpan) * 100 : 0;
 
         animFrameId = requestAnimationFrame(animatePlayback);
     }
@@ -118,10 +182,16 @@
             playing = false;
             if (animFrameId) cancelAnimationFrame(animFrameId);
         } else {
-            if (cacheIdx >= cacheFrames.length) {
-                cacheIdx = 0;
+            if (cacheFrames.length < 2) {
+                startPlayback();
+                return;
+            }
+            if (currentFrameIdx >= cacheFrames.length - 1) {
+                currentFrameIdx = 0;
+                interpT = 0;
             }
             playing = true;
+            msPerDay = 1000 / speed;
             lastFrameTime = performance.now();
             animatePlayback();
         }
@@ -130,21 +200,44 @@
     function stopPlayback() {
         playing = false;
         if (animFrameId) cancelAnimationFrame(animFrameId);
-        cacheIdx = 0;
+        currentFrameIdx = 0;
+        interpT = 0;
         progress = 0;
         currentDateDisplay = '';
     }
 
     function seekTo(pct) {
-        if (cacheFrames.length === 0) return;
-        cacheIdx = Math.floor((pct / 100) * cacheFrames.length);
-        cacheIdx = Math.min(cacheIdx, cacheFrames.length - 1);
-        if (cacheFrames[cacheIdx]) {
-            $waterLevelContourResult = cacheFrames[cacheIdx].result;
-            $waterLevelContourVisible = true;
-            currentDateDisplay = cacheFrames[cacheIdx].date;
-            progress = ((cacheIdx + 1) / cacheFrames.length) * 100;
+        if (cacheFrames.length < 2) return;
+        const totalSpan = cacheFrames[cacheFrames.length - 1].dateMs - cacheFrames[0].dateMs;
+        const targetMs = cacheFrames[0].dateMs + (pct / 100) * totalSpan;
+
+        let idx = 0;
+        for (let i = 0; i < cacheFrames.length - 1; i++) {
+            if (cacheFrames[i].dateMs <= targetMs && cacheFrames[i + 1].dateMs > targetMs) {
+                idx = i;
+                break;
+            }
+            if (i === cacheFrames.length - 2) {
+                idx = i;
+            }
         }
+
+        currentFrameIdx = idx;
+        const daySpan = cacheFrames[idx + 1] ? (cacheFrames[idx + 1].dateMs - cacheFrames[idx].dateMs) / (1000 * 60 * 60 * 24) : 1;
+        interpT = daySpan > 0 ? (targetMs - cacheFrames[idx].dateMs) / (1000 * 60 * 60 * 24) / daySpan : 0;
+        interpT = Math.max(0, Math.min(1, interpT));
+
+        if (cacheFrames[idx + 1]) {
+            const interpolated = interpolateResults(cacheFrames[idx], cacheFrames[idx + 1], interpT);
+            $waterLevelContourResult = interpolated;
+            $waterLevelContourVisible = true;
+            currentDateDisplay = dateToDateStr(targetMs);
+        } else {
+            $waterLevelContourResult = cacheFrames[idx].result;
+            $waterLevelContourVisible = true;
+            currentDateDisplay = cacheFrames[idx].date;
+        }
+        progress = pct;
     }
 
     function onProgressClick(e) {
@@ -217,7 +310,7 @@
     {#if cacheFrames.length > 0}
         <div class="playback-info">
             <span>帧数: {cacheFrames.length}</span>
-            <span>当前: {cacheIdx}/{cacheFrames.length}</span>
+            <span>当前帧: {currentFrameIdx + 1}/{cacheFrames.length}</span>
         </div>
     {/if}
 </div>

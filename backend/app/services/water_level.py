@@ -25,22 +25,26 @@ def compute_statistics(records: List[WaterLevel]) -> dict:
     sorted_records = sorted(records, key=lambda r: r.obs_date)
     max_rise = 0
     max_fall = 0
-    current_rise = 0
-    current_fall = 0
+    rise_start = None
+    fall_start = None
 
     for i in range(1, len(sorted_records)):
         diff = sorted_records[i].water_level - sorted_records[i - 1].water_level
         if diff > 0:
-            current_rise += 1
-            current_fall = 0
-            max_rise = max(max_rise, current_rise)
+            if rise_start is None:
+                rise_start = sorted_records[i - 1].obs_date
+            current_rise_span = (sorted_records[i].obs_date - rise_start).days
+            max_rise = max(max_rise, current_rise_span)
+            fall_start = None
         elif diff < 0:
-            current_fall += 1
-            current_rise = 0
-            max_fall = max(max_fall, current_fall)
+            if fall_start is None:
+                fall_start = sorted_records[i - 1].obs_date
+            current_fall_span = (sorted_records[i].obs_date - fall_start).days
+            max_fall = max(max_fall, current_fall_span)
+            rise_start = None
         else:
-            current_rise = 0
-            current_fall = 0
+            rise_start = None
+            fall_start = None
 
     annual_amplitudes = {}
     for r in sorted_records:
