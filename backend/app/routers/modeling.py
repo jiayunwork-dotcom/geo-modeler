@@ -10,7 +10,7 @@ from app.models import ModelRun, Borehole
 from app.schemas import ModelRunCreate, ModelRunOut
 from app.services.modeling3d import run_3d_modeling
 from app.services.krige import compute_variogram
-from app.main import notify_progress
+from app.websocket import notify_progress
 
 router = APIRouter()
 

@@ -1,16 +1,9 @@
-import os
-import json
-import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import CORS_ORIGINS
-from app.database import engine, Base, async_session
-from app.routers import projects, boreholes, profiles, modeling, attributes, export
-from app.models import ModelRun
-from sqlalchemy import select
-
-_active_ws: dict[str, list[WebSocket]] = {}
+from app.database import engine, Base
+from app.websocket import ws_model_progress as _ws_handler
 
 
 @asynccontextmanager
@@ -30,6 +23,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 路由导入放在app创建之后，避免循环依赖
+from app.routers import projects, boreholes, profiles, modeling, attributes, export
+
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(boreholes.router, prefix="/api/projects", tags=["boreholes"])
 app.include_router(profiles.router, prefix="/api/projects", tags=["profiles"])
@@ -44,30 +40,5 @@ async def health():
 
 
 @app.websocket("/api/ws/{project_id}")
-async def ws_model_progress(websocket: WebSocket, project_id: str):
-    await websocket.accept()
-    run_id = websocket.query_params.get("run_id", "")
-    key = f"{project_id}:{run_id}"
-    if key not in _active_ws:
-        _active_ws[key] = []
-    _active_ws[key].append(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        if websocket in _active_ws.get(key, []):
-            _active_ws[key].remove(websocket)
-
-
-async def notify_progress(run_id: str, project_id: str, progress: float, status: str):
-    key = f"{project_id}:{run_id}"
-    connections = _active_ws.get(key, [])
-    msg = json.dumps({"run_id": run_id, "progress": progress, "status": status})
-    for ws in connections[:]:
-        try:
-            await ws.send_text(msg)
-        except Exception:
-            try:
-                connections.remove(ws)
-            except ValueError:
-                pass
+async def ws_endpoint(websocket: WebSocket, project_id: str):
+    await _ws_handler(websocket, project_id)
