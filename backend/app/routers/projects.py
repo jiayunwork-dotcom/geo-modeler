@@ -8,12 +8,12 @@ from app.crud import get_project, list_projects, create_project, delete_project
 router = APIRouter()
 
 
-@router.get("/", response_model=list[ProjectOut])
+@router.get("", response_model=list[ProjectOut])
 async def api_list_projects(db: AsyncSession = Depends(get_db)):
     return await list_projects(db)
 
 
-@router.post("/", response_model=ProjectOut, status_code=201)
+@router.post("", response_model=ProjectOut, status_code=201)
 async def api_create_project(data: ProjectCreate, db: AsyncSession = Depends(get_db)):
     return await create_project(db, data.name, data.description)
 

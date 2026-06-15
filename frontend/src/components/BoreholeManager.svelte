@@ -15,8 +15,8 @@
     async function refreshBoreholes() {
         if (!$currentProject) return;
         try {
-            $boreholes = await api.get(`/boreholes/${$currentProject.id}/boreholes`);
-            $lithologyTypes = await api.get(`/boreholes/${$currentProject.id}/lithology-types`);
+            $boreholes = await api.get(`/projects/${$currentProject.id}/boreholes`);
+            $lithologyTypes = await api.get(`/projects/${$currentProject.id}/lithology-types`);
         } catch (e) {
             addToast(`刷新失败: ${e.message}`, 'error');
         }
@@ -46,7 +46,7 @@
     async function deleteBorehole(id) {
         if (!confirm('确定删除此钻孔？')) return;
         try {
-            await api.delete(`/boreholes/${$currentProject.id}/boreholes/${id}`);
+            await api.delete(`/projects/${$currentProject.id}/boreholes/${id}`);
             addToast('钻孔已删除', 'info');
             await refreshBoreholes();
         } catch (e) {
@@ -62,7 +62,7 @@
         if (!$editingBorehole) return;
         try {
             await api.put(
-                `/boreholes/${$currentProject.id}/boreholes/${$editingBorehole.id}`,
+                `/projects/${$currentProject.id}/boreholes/${$editingBorehole.id}`,
                 $editingBorehole
             );
             addToast('钻孔已更新', 'success');
@@ -83,7 +83,7 @@
 
     async function updateColor(lt) {
         try {
-            await api.put(`/boreholes/${$currentProject.id}/lithology-types/${lt.id}`, {
+            await api.put(`/projects/${$currentProject.id}/lithology-types/${lt.id}`, {
                 color: lt.color,
                 layer_order: lt.layer_order,
             });

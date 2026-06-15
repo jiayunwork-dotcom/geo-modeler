@@ -36,7 +36,7 @@
                 grid_ny: gridNy,
                 grid_nz: gridNz,
             };
-            const run = await api.post(`/modeling/${$currentProject.id}/run`, params);
+            const run = await api.post(`/projects/${$currentProject.id}/modeling/run`, params);
             $modelingProgress = { status: 'running', progress: 0, runId: run.id };
             addToast('建模任务已启动', 'info');
 
@@ -48,7 +48,7 @@
 
     function connectWs(runId) {
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${protocol}//${location.host}/ws/${$currentProject.id}?run_id=${runId}`);
+        const ws = new WebSocket(`${protocol}//${location.host}/api/ws/${$currentProject.id}?run_id=${runId}`);
 
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
@@ -81,7 +81,7 @@
         const poll = async () => {
             if ($modelingProgress.status !== 'running') return;
             try {
-                const run = await api.get(`/modeling/runs/${runId}`);
+                const run = await api.get(`/projects/modeling/runs/${runId}`);
                 $modelingProgress = { status: run.status, progress: run.progress, runId: run.id };
                 if (run.status === 'completed') {
                     addToast('三维建模完成!', 'success');
@@ -100,7 +100,7 @@
 
     async function loadModelResult(runId) {
         try {
-            const result = await api.get(`/modeling/runs/${runId}/result`);
+            const result = await api.get(`/projects/modeling/runs/${runId}/result`);
             $activeModelResult = result;
 
             result.lithologies?.forEach(name => {
@@ -122,7 +122,7 @@
         if (!$modelingProgress.runId || !selectedVolumeLayer) return;
         try {
             const result = await api.post(
-                `/modeling/runs/${$modelingProgress.runId}/volume?lithology_name=${encodeURIComponent(selectedVolumeLayer)}`
+                `/projects/modeling/runs/${$modelingProgress.runId}/volume?lithology_name=${encodeURIComponent(selectedVolumeLayer)}`
             );
             $volumeResult = result;
             addToast(`${result.lithology_name} 体积: ${result.volume.toFixed(1)} m³`, 'success');
@@ -133,7 +133,7 @@
 
     async function refreshRuns() {
         if (!$currentProject) return;
-        $modelRuns = await api.get(`/modeling/${$currentProject.id}/runs`);
+        $modelRuns = await api.get(`/projects/${$currentProject.id}/modeling/runs`);
     }
 </script>
 

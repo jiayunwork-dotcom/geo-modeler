@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from app.database import get_db
-from app.models import ModelRun, Borehole, ProfileLine, Project, LithologyType
+from app.models import ModelRun, Borehole, ProfileLine, LithologyType
 from app.services.export_gltf import export_gltf
 from app.services.export_profile import export_profile_png, export_profile_svg
 from app.services.export_excel import export_stats_excel
@@ -15,7 +15,7 @@ from app.services.export_pdf import export_report_pdf
 router = APIRouter()
 
 
-@router.get("/gltf/{run_id}")
+@router.get("/export/gltf/{run_id}")
 async def api_export_gltf(run_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ModelRun).where(ModelRun.id == run_id))
     model_run = result.scalar_one_or_none()
@@ -30,7 +30,7 @@ async def api_export_gltf(run_id: UUID, db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.get("/profile/{profile_id}/png")
+@router.get("/export/profile/{profile_id}/png")
 async def api_export_profile_png(profile_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ProfileLine).where(ProfileLine.id == profile_id))
     profile = result.scalar_one_or_none()
@@ -55,7 +55,7 @@ async def api_export_profile_png(profile_id: UUID, db: AsyncSession = Depends(ge
     )
 
 
-@router.get("/profile/{profile_id}/svg")
+@router.get("/export/profile/{profile_id}/svg")
 async def api_export_profile_svg(profile_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ProfileLine).where(ProfileLine.id == profile_id))
     profile = result.scalar_one_or_none()
@@ -80,7 +80,7 @@ async def api_export_profile_svg(profile_id: UUID, db: AsyncSession = Depends(ge
     )
 
 
-@router.get("/stats/{project_id}/excel")
+@router.get("/export/stats/{project_id}/excel")
 async def api_export_stats_excel(project_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Borehole)
@@ -111,7 +111,7 @@ async def api_export_stats_excel(project_id: UUID, db: AsyncSession = Depends(ge
     )
 
 
-@router.get("/report/{run_id}/pdf")
+@router.get("/export/report/{run_id}/pdf")
 async def api_export_report_pdf(run_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ModelRun).where(ModelRun.id == run_id))
     model_run = result.scalar_one_or_none()

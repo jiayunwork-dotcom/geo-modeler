@@ -4,17 +4,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from app.database import get_db
-from app.models import Borehole, ModelRun
+from app.models import Borehole
 from app.services.attribute_field import interpolate_attribute_field
 
 router = APIRouter()
 
 
-@router.post("/{project_id}/interpolate")
+@router.post("/{project_id}/attributes/interpolate")
 async def api_interpolate_attribute(
     project_id: UUID,
     attribute: str,
-    run_id: UUID = None,
     grid_nx: int = 50,
     grid_ny: int = 50,
     grid_nz: int = 25,

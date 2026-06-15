@@ -11,6 +11,7 @@
     import ModelingPanel from './components/ModelingPanel.svelte';
     import AttributePanel from './components/AttributePanel.svelte';
     import ExportPanel from './components/ExportPanel.svelte';
+    import SurfaceOverlay from './components/SurfaceOverlay.svelte';
     import Toast from './components/Toast.svelte';
 
     let projectList = [];
@@ -34,10 +35,10 @@
             $currentProject = project;
 
             const [bhs, lts, pfs, runs] = await Promise.all([
-                api.get(`/boreholes/${id}/boreholes`),
-                api.get(`/boreholes/${id}/lithology-types`),
-                api.get(`/profiles/project/${id}`),
-                api.get(`/modeling/${id}/runs`),
+                api.get(`/projects/${id}/boreholes`),
+                api.get(`/projects/${id}/lithology-types`),
+                api.get(`/projects/${id}/profiles`),
+                api.get(`/projects/${id}/modeling/runs`),
             ]);
             $boreholes = bhs;
             $lithologyTypes = lts;
@@ -111,6 +112,10 @@
             {:else if $activeTab === 'export'}
                 <ExportPanel />
             {/if}
+
+            <div class="divider" />
+
+            <SurfaceOverlay />
         </aside>
 
         <main class="main-content">
@@ -222,6 +227,13 @@
         width: var(--panel-width);
         min-width: var(--panel-width);
         flex-shrink: 0;
+        overflow-y: auto;
+    }
+
+    .divider {
+        height: 1px;
+        background: var(--border);
+        margin: 4px 0;
     }
 
     .main-content {

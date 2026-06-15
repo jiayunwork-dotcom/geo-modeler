@@ -11,7 +11,7 @@ from app.services.profile import generate_profile_data
 router = APIRouter()
 
 
-@router.get("/project/{project_id}", response_model=list[ProfileLineOut])
+@router.get("/{project_id}/profiles", response_model=list[ProfileLineOut])
 async def api_list_profiles(project_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(ProfileLine).where(ProfileLine.project_id == project_id)
@@ -19,8 +19,10 @@ async def api_list_profiles(project_id: UUID, db: AsyncSession = Depends(get_db)
     return result.scalars().all()
 
 
-@router.post("/", response_model=ProfileLineOut, status_code=201)
-async def api_create_profile(data: ProfileLineCreate, db: AsyncSession = Depends(get_db)):
+@router.post("/{project_id}/profiles", response_model=ProfileLineOut, status_code=201)
+async def api_create_profile(
+    project_id: UUID, data: ProfileLineCreate, db: AsyncSession = Depends(get_db)
+):
     valid_methods = ("linear", "cubic_spline", "kriging")
     if data.interpolation_method not in valid_methods:
         raise HTTPException(400, f"插值方式必须为 {valid_methods}")
@@ -33,7 +35,7 @@ async def api_create_profile(data: ProfileLineCreate, db: AsyncSession = Depends
         raise HTTPException(400, "剖面线至少需要2个钻孔")
 
     profile = ProfileLine(
-        project_id=boreholes[0].project_id,
+        project_id=project_id,
         name=data.name,
         borehole_ids=data.borehole_ids,
         interpolation_method=data.interpolation_method,
@@ -44,7 +46,7 @@ async def api_create_profile(data: ProfileLineCreate, db: AsyncSession = Depends
     return profile
 
 
-@router.get("/{profile_id}", response_model=ProfileLineOut)
+@router.get("/profiles/{profile_id}", response_model=ProfileLineOut)
 async def api_get_profile(profile_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(ProfileLine).where(ProfileLine.id == profile_id)
@@ -55,7 +57,7 @@ async def api_get_profile(profile_id: UUID, db: AsyncSession = Depends(get_db)):
     return profile
 
 
-@router.get("/{profile_id}/data")
+@router.get("/profiles/{profile_id}/data")
 async def api_get_profile_data(profile_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(ProfileLine).where(ProfileLine.id == profile_id)
@@ -74,7 +76,7 @@ async def api_get_profile_data(profile_id: UUID, db: AsyncSession = Depends(get_
     return await generate_profile_data(boreholes, profile.interpolation_method)
 
 
-@router.post("/{profile_id}/annotations", response_model=AnnotationOut, status_code=201)
+@router.post("/profiles/{profile_id}/annotations", response_model=AnnotationOut, status_code=201)
 async def api_create_annotation(
     profile_id: UUID, data: AnnotationCreate, db: AsyncSession = Depends(get_db)
 ):
@@ -99,7 +101,7 @@ async def api_create_annotation(
     return annotation
 
 
-@router.get("/{profile_id}/annotations", response_model=list[AnnotationOut])
+@router.get("/profiles/{profile_id}/annotations", response_model=list[AnnotationOut])
 async def api_list_annotations(profile_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Annotation).where(Annotation.profile_id == profile_id)
@@ -107,7 +109,7 @@ async def api_list_annotations(profile_id: UUID, db: AsyncSession = Depends(get_
     return result.scalars().all()
 
 
-@router.delete("/annotations/{annotation_id}", status_code=204)
+@router.delete("/profiles/annotations/{annotation_id}", status_code=204)
 async def api_delete_annotation(annotation_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Annotation).where(Annotation.id == annotation_id)

@@ -1,5 +1,5 @@
 <script>
-    import { currentProject, boreholes, attributeField, addToast } from '../stores/index.js';
+    import { currentProject, boreholes, attributeField, attributeRendering, addToast } from '../stores/index.js';
     import api from '../api/client.js';
 
     let selectedAttribute = 'spt_n';
@@ -19,6 +19,16 @@
         compression_modulus: '压缩模量',
     };
 
+    $: {
+        $attributeRendering = {
+            ...$attributeRendering,
+            mode: renderingMode,
+            isosurfaceValue,
+            colorMin,
+            colorMax,
+        };
+    }
+
     async function interpolateField() {
         if (!$currentProject) {
             addToast('请先选择项目', 'warning');
@@ -27,7 +37,7 @@
         loading = true;
         try {
             const result = await api.post(
-                `/attributes/${$currentProject.id}/interpolate?attribute=${selectedAttribute}&grid_nx=${gridNx}&grid_ny=${gridNy}&grid_nz=${gridNz}&variogram_model=${variogramModel}`
+                `/projects/${$currentProject.id}/attributes/interpolate?attribute=${selectedAttribute}&grid_nx=${gridNx}&grid_ny=${gridNy}&grid_nz=${gridNz}&variogram_model=${variogramModel}`
             );
             $attributeField = result;
             if (result.value_min !== undefined) {

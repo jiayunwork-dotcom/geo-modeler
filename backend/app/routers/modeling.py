@@ -1,7 +1,7 @@
 import asyncio
 import json
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -10,13 +10,22 @@ from app.models import ModelRun, Borehole
 from app.schemas import ModelRunCreate, ModelRunOut
 from app.services.modeling3d import run_3d_modeling
 from app.services.krige import compute_variogram
+from app.main import notify_progress
 
 router = APIRouter()
 
-_active_connections: dict[str, list[WebSocket]] = {}
+
+@router.get("/{project_id}/modeling/runs", response_model=list[ModelRunOut])
+async def api_list_model_runs(project_id: UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(ModelRun)
+        .where(ModelRun.project_id == project_id)
+        .order_by(ModelRun.created_at.desc())
+    )
+    return result.scalars().all()
 
 
-@router.post("/{project_id}/run", response_model=ModelRunOut, status_code=201)
+@router.post("/{project_id}/modeling/run", response_model=ModelRunOut, status_code=201)
 async def api_start_modeling(
     project_id: UUID, data: ModelRunCreate, db: AsyncSession = Depends(get_db)
 ):
@@ -51,23 +60,13 @@ async def api_start_modeling(
     await db.refresh(model_run)
 
     asyncio.create_task(
-        _run_modeling_task(str(model_run.id), str(project_id), boreholes, data)
+        _run_modeling_task(str(model_run.id), str(project_id), list(boreholes), data)
     )
 
     return model_run
 
 
-@router.get("/{project_id}/runs", response_model=list[ModelRunOut])
-async def api_list_model_runs(project_id: UUID, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(ModelRun)
-        .where(ModelRun.project_id == project_id)
-        .order_by(ModelRun.created_at.desc())
-    )
-    return result.scalars().all()
-
-
-@router.get("/runs/{run_id}", response_model=ModelRunOut)
+@router.get("/modeling/runs/{run_id}", response_model=ModelRunOut)
 async def api_get_model_run(run_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ModelRun).where(ModelRun.id == run_id))
     model_run = result.scalar_one_or_none()
@@ -76,7 +75,7 @@ async def api_get_model_run(run_id: UUID, db: AsyncSession = Depends(get_db)):
     return model_run
 
 
-@router.get("/runs/{run_id}/result")
+@router.get("/modeling/runs/{run_id}/result")
 async def api_get_model_result(run_id: UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ModelRun).where(ModelRun.id == run_id))
     model_run = result.scalar_one_or_none()
@@ -87,7 +86,7 @@ async def api_get_model_result(run_id: UUID, db: AsyncSession = Depends(get_db))
     return model_run.result_data
 
 
-@router.post("/runs/{run_id}/volume")
+@router.post("/modeling/runs/{run_id}/volume")
 async def api_compute_volume(
     run_id: UUID, lithology_name: str, db: AsyncSession = Depends(get_db)
 ):
@@ -99,32 +98,6 @@ async def api_compute_volume(
     from app.services.volume import compute_layer_volume
     volume = compute_layer_volume(model_run.result_data, lithology_name)
     return {"lithology_name": lithology_name, "volume": volume}
-
-
-@router.websocket("/ws/{project_id}")
-async def ws_model_progress(websocket: WebSocket, project_id: str):
-    await websocket.accept()
-    run_id = websocket.query_params.get("run_id", "")
-    key = f"{project_id}:{run_id}"
-    if key not in _active_connections:
-        _active_connections[key] = []
-    _active_connections[key].append(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        _active_connections[key].remove(websocket)
-
-
-async def _notify_progress(run_id: str, project_id: str, progress: float, status: str):
-    key = f"{project_id}:{run_id}"
-    connections = _active_connections.get(key, [])
-    msg = json.dumps({"run_id": run_id, "progress": progress, "status": status})
-    for ws in connections[:]:
-        try:
-            await ws.send_text(msg)
-        except Exception:
-            connections.remove(ws)
 
 
 async def _run_modeling_task(run_id: str, project_id: str, boreholes, params: ModelRunCreate):
@@ -141,10 +114,10 @@ async def _run_modeling_task(run_id: str, project_id: str, boreholes, params: Mo
                 mr = result.scalar_one()
                 mr.progress = p
                 await db.commit()
-            await _notify_progress(run_id, project_id, p, "running")
+            await notify_progress(run_id, project_id, p, "running")
 
         result_data = await run_3d_modeling(
-            boreholes=list(boreholes),
+            boreholes=boreholes,
             variogram_model=params.variogram_model,
             range_param=params.range_param,
             sill_param=params.sill_param,
@@ -167,7 +140,7 @@ async def _run_modeling_task(run_id: str, project_id: str, boreholes, params: Mo
             mr.completed_at = datetime.utcnow()
             await db.commit()
 
-        await _notify_progress(run_id, project_id, 100, "completed")
+        await notify_progress(run_id, project_id, 100, "completed")
 
     except Exception as e:
         async with async_session() as db:
@@ -177,4 +150,4 @@ async def _run_modeling_task(run_id: str, project_id: str, boreholes, params: Mo
             mr.result_data = {"error": str(e)}
             await db.commit()
 
-        await _notify_progress(run_id, project_id, 0, "failed")
+        await notify_progress(run_id, project_id, 0, "failed")

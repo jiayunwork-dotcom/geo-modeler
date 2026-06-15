@@ -14,6 +14,13 @@ export const activeModelResult = writable(null);
 
 export const attributeField = writable(null);
 
+export const attributeRendering = writable({
+    mode: 'voxel',
+    isosurfaceValue: 0,
+    colorMin: 0,
+    colorMax: 100,
+});
+
 export const toasts = writable([]);
 
 export function addToast(message, type = 'info', duration = 4000) {
@@ -43,3 +50,11 @@ export const activeTab = writable('boreholes');
 export const editingBorehole = writable(null);
 
 export const wsConnection = writable(null);
+
+export const surfaceOverlay = writable({
+    orthoImage: null,
+    demImage: null,
+    opacity: 1.0,
+    visible: true,
+});
+

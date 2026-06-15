@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas import (
-    BoreholeCreate, BoreholeOut, BoreholeUpdate, BoreholeLayerOut,
+    BoreholeCreate, BoreholeOut, BoreholeUpdate,
     LithologyTypeOut, LithologyTypeUpdate, CSVImportResult
 )
 from app.crud import (
