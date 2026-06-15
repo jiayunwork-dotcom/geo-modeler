@@ -51,6 +51,8 @@ export const editingBorehole = writable(null);
 
 export const wsConnection = writable(null);
 
+export const activeProfileData = writable(null);
+
 export const surfaceOverlay = writable({
     orthoImage: null,
     demImage: null,

@@ -3,7 +3,7 @@
     import {
         currentProject, boreholes, modelRuns, activeModelResult,
         modelingProgress, layerVisibility, layerOpacity, clipPlane,
-        volumeResult, addToast
+        volumeResult, lithologyTypes, addToast
     } from '../stores/index.js';
     import api from '../api/client.js';
 

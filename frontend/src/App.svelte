@@ -2,11 +2,12 @@
     import { onMount } from 'svelte';
     import {
         currentProject, boreholes, lithologyTypes, profiles,
-        modelRuns, toasts, activeTab, addToast
+        modelRuns, toasts, activeTab, activeProfileData, addToast
     } from './stores/index.js';
     import api from './api/client.js';
     import BoreholeManager from './components/BoreholeManager.svelte';
     import ProfileEditor from './components/ProfileEditor.svelte';
+    import ProfileCanvas from './components/ProfileCanvas.svelte';
     import Viewer3D from './components/Viewer3D.svelte';
     import ModelingPanel from './components/ModelingPanel.svelte';
     import AttributePanel from './components/AttributePanel.svelte';
@@ -119,7 +120,11 @@
         </aside>
 
         <main class="main-content">
-            <Viewer3D />
+            {#if $activeTab === 'profiles' && $activeProfileData}
+                <ProfileCanvas />
+            {:else}
+                <Viewer3D />
+            {/if}
         </main>
     </div>
 </div>

@@ -14,6 +14,7 @@
     let attributeMesh = null;
     let surfaceMesh = null;
     let animationId;
+    let sceneReady = false;
 
     import * as THREE from 'three';
     import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -50,11 +51,88 @@
 
     onMount(() => {
         initScene();
+
+        const unsubBoreholes = boreholes.subscribe(v => {
+            if (sceneReady && v && v.length > 0) {
+                updateBoreholeCylinders(v);
+            }
+        });
+
+        const unsubModel = activeModelResult.subscribe(v => {
+            if (sceneReady && v) {
+                updateModelSurfaces();
+            }
+        });
+
+        const unsubClip = clipPlane.subscribe(() => {
+            if (sceneReady) {
+                updateClipPlane();
+            }
+        });
+
+        const unsubLayerVis = layerVisibility.subscribe(() => {
+            if (sceneReady && $activeModelResult) {
+                updateModelSurfaces();
+            }
+        });
+
+        const unsubLayerOpacity = layerOpacity.subscribe(() => {
+            if (sceneReady && $activeModelResult) {
+                updateModelSurfaces();
+            }
+        });
+
+        const unsubAttr = attributeField.subscribe(v => {
+            if (!sceneReady) return;
+            if (v) {
+                updateAttributeField();
+            } else if (attributeMesh) {
+                disposeMesh(attributeMesh);
+                attributeMesh = null;
+            }
+        });
+
+        const unsubAttrRendering = attributeRendering.subscribe(() => {
+            if (sceneReady && $attributeField) {
+                updateAttributeField();
+            }
+        });
+
+        const unsubOverlay = surfaceOverlay.subscribe(() => {
+            if (sceneReady) {
+                updateSurfaceOverlay();
+            }
+        });
+
         return () => {
+            unsubBoreholes();
+            unsubModel();
+            unsubClip();
+            unsubLayerVis();
+            unsubLayerOpacity();
+            unsubAttr();
+            unsubAttrRendering();
+            unsubOverlay();
             cancelAnimationFrame(animationId);
             renderer?.dispose();
         };
     });
+
+    function disposeMesh(mesh) {
+        if (!mesh) return;
+        scene.remove(mesh);
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) {
+            if (Array.isArray(mesh.material)) {
+                mesh.material.forEach(m => m.dispose());
+            } else {
+                mesh.material.dispose();
+            }
+        }
+        if (mesh.children) {
+            mesh.children.forEach(c => disposeMesh(c));
+        }
+    }
 
     function initScene() {
         if (!container) return;
@@ -88,6 +166,8 @@
         const axesHelper = new THREE.AxesHelper(50);
         scene.add(axesHelper);
 
+        sceneReady = true;
+
         animate();
 
         new ResizeObserver(() => {
@@ -105,66 +185,27 @@
         renderer?.render(scene, camera);
     }
 
-    $: {
-        if (scene && $boreholes.length > 0) {
-            updateBoreholeCylinders();
-        }
-    }
-
-    $: {
-        if (scene && $activeModelResult) {
-            updateModelSurfaces();
-        }
-    }
-
-    $: {
-        updateClipPlane();
-    }
-
-    $: {
-        if (scene && $attributeField) {
-            updateAttributeField();
-        } else if (scene && attributeMesh) {
-            scene.remove(attributeMesh);
-            attributeMesh.geometry?.dispose();
-            if (Array.isArray(attributeMesh.material)) {
-                attributeMesh.material.forEach(m => m.dispose());
-            } else {
-                attributeMesh.material?.dispose();
-            }
-            attributeMesh = null;
-        }
-    }
-
-    $: {
-        if (scene && $surfaceOverlay) {
-            updateSurfaceOverlay();
-        }
-    }
-
-    function updateBoreholeCylinders() {
-        boreholeMeshes.forEach(m => scene.remove(m));
+    function updateBoreholeCylinders(bhs) {
+        boreholeMeshes.forEach(m => { disposeMesh(m); });
         boreholeMeshes = [];
 
-        if (!$boreholes || $boreholes.length === 0) return;
+        if (!bhs || bhs.length === 0) return;
 
-        const coords = $boreholes.map(b => [b.longitude, b.latitude, b.elevation]);
+        const coords = bhs.map(b => [b.longitude, b.latitude, b.elevation]);
         if (coords.length === 0) return;
 
         const lonMin = Math.min(...coords.map(c => c[0]));
         const latMin = Math.min(...coords.map(c => c[1]));
 
-        $boreholes.forEach(bh => {
+        bhs.forEach(bh => {
             const x = (bh.longitude - lonMin) * 111320 * Math.cos(bh.latitude * Math.PI / 180);
             const z = (bh.latitude - latMin) * 111320;
-            const maxDepth = bh.layers.length > 0 ? Math.max(...bh.layers.map(l => l.bottom_depth)) : 10;
 
-            const cylinderGeo = new THREE.CylinderGeometry(1, 1, maxDepth, 16);
-
-            const currentY = bh.elevation;
+            if (!bh.layers || bh.layers.length === 0) return;
 
             bh.layers.forEach(layer => {
-                const color = getLayerColor(layer.lithology_name, $lithologyTypes?.findIndex(l => l.name === layer.lithology_name) || 0);
+                const ltIdx = $lithologyTypes?.findIndex(l => l.name === layer.lithology_name) || 0;
+                const color = getLayerColor(layer.lithology_name, ltIdx);
                 const thickness = layer.bottom_depth - layer.top_depth;
 
                 const segGeo = new THREE.CylinderGeometry(1.2, 1.2, thickness, 16);
@@ -190,15 +231,18 @@
     }
 
     function updateModelSurfaces() {
-        Object.values(layerMeshes).forEach(group => scene.remove(group));
+        Object.values(layerMeshes).forEach(group => { disposeMesh(group); });
         layerMeshes = {};
 
-        if (!$activeModelResult?.surfaces) return;
-
         const result = $activeModelResult;
+        if (!result?.surfaces) return;
+
         const gridInfo = result.grid;
+        if (!gridInfo) return;
         const nx = gridInfo.nx;
         const ny = gridInfo.ny;
+
+        if (!result.lithologies) return;
 
         result.lithologies.forEach((lithoName, idx) => {
             const surface = result.surfaces[lithoName];
@@ -221,8 +265,8 @@
                 for (let i = 0; i < nx; i++) {
                     const x = (i / (nx - 1)) * 100;
                     const z = (j / (ny - 1)) * 100;
-                    const y_top = top[j][i];
-                    const y_bottom = bottom[j][i];
+                    const y_top = top[j]?.[i] ?? 0;
+                    const y_bottom = bottom[j]?.[i] ?? 0;
 
                     vertices.push(x, y_top, z);
                     vertices.push(x, y_bottom, z);
@@ -288,37 +332,37 @@
             clipPlaneObj = null;
         }
 
-        if (scene && $activeModelResult) {
+        if (sceneReady && $activeModelResult) {
             updateModelSurfaces();
         }
     }
 
     function updateAttributeField() {
         if (attributeMesh) {
-            scene.remove(attributeMesh);
-            attributeMesh.geometry?.dispose();
-            if (Array.isArray(attributeMesh.material)) {
-                attributeMesh.material.forEach(m => m.dispose());
-            } else {
-                attributeMesh.material?.dispose();
-            }
+            disposeMesh(attributeMesh);
             attributeMesh = null;
         }
 
-        if (!$attributeField?.grid_values) return;
+        const attrField = $attributeField;
+        if (!attrField) return;
 
-        const values = $attributeField.grid_values;
-        const grid = $attributeField.grid;
-        if (!grid || !values) return;
+        const values = attrField.field || attrField.grid_values;
+        if (!values) return;
 
-        const { nx, ny, nz, x_min, x_max, y_min, y_max, z_min, z_max } = grid;
+        const grid = attrField.grid;
+        if (!grid) return;
+
+        const nx = grid.nx || grid.lon_nx || 50;
+        const ny = grid.ny || grid.lat_ny || 50;
+        const nz = grid.nz || grid.elev_nz || 25;
+
         const mode = $attributeRendering.mode;
         const vmin = $attributeRendering.colorMin;
         const vmax = $attributeRendering.colorMax;
 
-        const dx = (x_max - x_min) / (nx - 1 || 1);
-        const dy = (y_max - y_min) / (ny - 1 || 1);
-        const dz = (z_max - z_min) / (nz - 1 || 1);
+        const zMin = grid.elev_min ?? grid.z_min ?? 0;
+        const zMax = grid.elev_max ?? grid.z_max ?? 100;
+        const dz = (zMax - zMin) / (nz - 1 || 1);
 
         const voxelSize = 100 / Math.max(nx, ny);
 
@@ -340,9 +384,9 @@
                         const rgb = valueToColor(v, vmin, vmax);
                         const px = (i / (nx - 1 || 1)) * 100;
                         const pz = (j / (ny - 1 || 1)) * 100;
-                        const py = z_min + k * dz;
+                        const py = zMin + k * dz;
 
-                        const geo = new THREE.BoxGeometry(voxelSize * 0.8, dz * 0.8 || 0.5, voxelSize * 0.8);
+                        const geo = new THREE.BoxGeometry(voxelSize * 0.8, Math.abs(dz * 0.8) || 0.5, voxelSize * 0.8);
                         const mat = new THREE.MeshBasicMaterial({
                             color: new THREE.Color(rgb[0], rgb[1], rgb[2]),
                             transparent: true,
@@ -381,12 +425,12 @@
 
                         const center_x = (i + 0.5) / (nx - 1) * 100;
                         const center_z = (j + 0.5) / (ny - 1) * 100;
-                        const center_y = z_min + (k + 0.5) * dz;
+                        const center_y = zMin + (k + 0.5) * dz;
                         const avgVal = vals.reduce((a, b) => a + b, 0) / 8;
                         const rgb = valueToColor(avgVal, vmin, vmax);
 
                         const s = voxelSize * 0.9;
-                        const sy = Math.max(dz * 0.9, s * 0.2);
+                        const sy = Math.max(Math.abs(dz * 0.9), s * 0.2);
                         verts.push(
                             center_x - s/2, center_y - sy/2, center_z - s/2,
                             center_x + s/2, center_y - sy/2, center_z - s/2,
@@ -434,21 +478,13 @@
 
     function updateSurfaceOverlay() {
         if (surfaceMesh) {
-            scene.remove(surfaceMesh);
-            surfaceMesh.geometry?.dispose();
-            if (Array.isArray(surfaceMesh.material)) {
-                surfaceMesh.material.forEach(m => m.dispose());
-            } else {
-                surfaceMesh.material?.dispose();
-            }
+            disposeMesh(surfaceMesh);
             surfaceMesh = null;
         }
 
         const overlay = $surfaceOverlay;
         if (!overlay || !overlay.visible || (!overlay.orthoImage && !overlay.demImage)) return;
 
-        const width = 100;
-        const height = 100;
         const size = 100;
 
         if (overlay.demImage) {
@@ -457,7 +493,6 @@
             canvas.width = 64;
             canvas.height = 64;
             const ctx = canvas.getContext('2d');
-            const imgRatio = size / 100;
             ctx.drawImage(img, 0, 0, 64, 64);
             try {
                 const imgData = ctx.getImageData(0, 0, 64, 64).data;
@@ -488,7 +523,6 @@
                     texture.needsUpdate = true;
                     matParams.map = texture;
                 } else {
-                    matParams.vertexColors = false;
                     matParams.color = 0x88aa66;
                 }
 

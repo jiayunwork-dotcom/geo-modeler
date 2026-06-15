@@ -1,7 +1,8 @@
 <script>
     import { afterUpdate, tick } from 'svelte';
     import {
-        currentProject, boreholes, lithologyTypes, selectedBoreholes, profiles, addToast
+        currentProject, boreholes, lithologyTypes, selectedBoreholes, profiles,
+        activeProfileData, addToast
     } from '../stores/index.js';
     import api from '../api/client.js';
 
@@ -220,6 +221,7 @@
         try {
             profileData = await api.get(`/projects/profiles/${profileId}/data`);
             annotations = await api.get(`/projects/profiles/${profileId}/annotations`);
+            $activeProfileData = profileData;
             await tick();
             renderProfileCanvas();
         } catch (e) {
