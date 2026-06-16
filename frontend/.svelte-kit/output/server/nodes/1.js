@@ -1,6 +1,8 @@
 
 
 export const index = 1;
-export const imports = ["_app/immutable/nodes/1.JBkStGMX.js","_app/immutable/chunks/CFrTkFHZ.js","_app/immutable/chunks/DXW_PE2e.js","_app/immutable/chunks/Cwt_Dagz.js","_app/immutable/chunks/W-IK_yO4.js"];
+let component_cache;
+export const component = async () => component_cache ??= (await import('../entries/fallbacks/error.svelte.js')).default;
+export const imports = ["_app/immutable/nodes/1.DKUejToE.js","_app/immutable/chunks/scheduler.CFrTkFHZ.js","_app/immutable/chunks/index.aK-vytiY.js","_app/immutable/chunks/entry.CivJuHy0.js","_app/immutable/chunks/index.D9njJScM.js"];
 export const stylesheets = [];
 export const fonts = [];

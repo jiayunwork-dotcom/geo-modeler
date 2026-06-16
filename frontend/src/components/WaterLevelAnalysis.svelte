@@ -799,11 +799,12 @@
     }
 
     .compare-chart-container {
+        position: relative;
         width: 100%;
         height: 320px;
         border: 1px solid var(--border);
         border-radius: 6px;
-        overflow: hidden;
+        overflow: visible;
     }
 
     .compare-canvas {

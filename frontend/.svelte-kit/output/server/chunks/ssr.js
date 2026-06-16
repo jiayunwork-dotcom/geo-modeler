@@ -31,7 +31,8 @@ function set_current_component(component) {
   current_component = component;
 }
 function get_current_component() {
-  if (!current_component) throw new Error("Function called outside component initialization");
+  if (!current_component)
+    throw new Error("Function called outside component initialization");
   return current_component;
 }
 function setContext(key, context) {
@@ -44,7 +45,7 @@ function getContext(key) {
 function ensure_array_like(array_like_or_iterator) {
   return array_like_or_iterator?.length !== void 0 ? array_like_or_iterator : Array.from(array_like_or_iterator);
 }
-const ATTR_REGEX = /[&"<]/g;
+const ATTR_REGEX = /[&"]/g;
 const CONTENT_REGEX = /[&<]/g;
 function escape(value, is_attr = false) {
   const str = String(value);
@@ -73,7 +74,8 @@ const missing_component = {
 };
 function validate_component(component, name) {
   if (!component || !component.$$render) {
-    if (name === "svelte:component") name += " this={...}";
+    if (name === "svelte:component")
+      name += " this={...}";
     throw new Error(
       `<${name}> is not a valid SSR component. You may need to review your build config to ensure that dependencies are compiled, rather than imported as pre-compiled modules. Otherwise you may need to fix a <${name}>.`
     );
@@ -118,7 +120,8 @@ function create_ssr_component(fn) {
   };
 }
 function add_attribute(name, value, boolean) {
-  if (value == null || boolean && !value) return "";
+  if (value == null || boolean && !value)
+    return "";
   const assignment = boolean && value === true ? "" : `="${escape(value, true)}"`;
   return ` ${name}${assignment}`;
 }

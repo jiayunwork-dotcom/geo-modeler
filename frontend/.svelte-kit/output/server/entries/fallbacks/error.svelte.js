@@ -1,23 +1,16 @@
 import { g as getContext, c as create_ssr_component, s as subscribe, e as escape } from "../../chunks/ssr.js";
-import "@sveltejs/kit/internal";
 import "../../chunks/exports.js";
-import "../../chunks/utils2.js";
-import "@sveltejs/kit/internal/server";
-import { o as onMount } from "../../chunks/ssr2.js";
-const is_legacy = onMount.toString().includes("$$") || /function \w+\(\) \{\}/.test(onMount.toString());
-const placeholder_url = "a:";
-if (is_legacy) {
-  ({
-    data: {},
-    form: null,
-    error: null,
-    params: {},
-    route: { id: null },
-    state: {},
-    status: -1,
-    url: new URL(placeholder_url)
-  });
+import "devalue";
+function get(key, parse = JSON.parse) {
+  try {
+    return parse(sessionStorage[key]);
+  } catch {
+  }
 }
+const SNAPSHOT_KEY = "sveltekit:snapshot";
+const SCROLL_KEY = "sveltekit:scroll";
+get(SCROLL_KEY) ?? {};
+get(SNAPSHOT_KEY) ?? {};
 const getStores = () => {
   const stores = getContext("__svelte__");
   return {

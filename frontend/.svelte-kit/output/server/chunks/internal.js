@@ -1,6 +1,12 @@
 import { c as create_ssr_component, a as setContext, v as validate_component, m as missing_component } from "./ssr.js";
-import { a as afterUpdate } from "./ssr2.js";
-import "./server.js";
+function afterUpdate() {
+}
+let prerendering = false;
+function set_building() {
+}
+function set_prerendering() {
+  prerendering = true;
+}
 const Root = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   let { stores } = $$props;
   let { page } = $$props;
@@ -13,13 +19,20 @@ const Root = create_ssr_component(($$result, $$props, $$bindings, slots) => {
     setContext("__svelte__", stores);
   }
   afterUpdate(stores.page.notify);
-  if ($$props.stores === void 0 && $$bindings.stores && stores !== void 0) $$bindings.stores(stores);
-  if ($$props.page === void 0 && $$bindings.page && page !== void 0) $$bindings.page(page);
-  if ($$props.constructors === void 0 && $$bindings.constructors && constructors !== void 0) $$bindings.constructors(constructors);
-  if ($$props.components === void 0 && $$bindings.components && components !== void 0) $$bindings.components(components);
-  if ($$props.form === void 0 && $$bindings.form && form !== void 0) $$bindings.form(form);
-  if ($$props.data_0 === void 0 && $$bindings.data_0 && data_0 !== void 0) $$bindings.data_0(data_0);
-  if ($$props.data_1 === void 0 && $$bindings.data_1 && data_1 !== void 0) $$bindings.data_1(data_1);
+  if ($$props.stores === void 0 && $$bindings.stores && stores !== void 0)
+    $$bindings.stores(stores);
+  if ($$props.page === void 0 && $$bindings.page && page !== void 0)
+    $$bindings.page(page);
+  if ($$props.constructors === void 0 && $$bindings.constructors && constructors !== void 0)
+    $$bindings.constructors(constructors);
+  if ($$props.components === void 0 && $$bindings.components && components !== void 0)
+    $$bindings.components(components);
+  if ($$props.form === void 0 && $$bindings.form && form !== void 0)
+    $$bindings.form(form);
+  if ($$props.data_0 === void 0 && $$bindings.data_0 && data_0 !== void 0)
+    $$bindings.data_0(data_0);
+  if ($$props.data_1 === void 0 && $$bindings.data_1 && data_1 !== void 0)
+    $$bindings.data_1(data_1);
   let $$settled;
   let $$rendered;
   let previous_head = $$result.head;
@@ -31,11 +44,7 @@ const Root = create_ssr_component(($$result, $$props, $$bindings, slots) => {
     }
     $$rendered = `  ${constructors[1] ? `${validate_component(constructors[0] || missing_component, "svelte:component").$$render(
       $$result,
-      {
-        data: data_0,
-        params: page.params,
-        this: components[0]
-      },
+      { data: data_0, this: components[0] },
       {
         this: ($$value) => {
           components[0] = $$value;
@@ -46,12 +55,7 @@ const Root = create_ssr_component(($$result, $$props, $$bindings, slots) => {
         default: () => {
           return `${validate_component(constructors[1] || missing_component, "svelte:component").$$render(
             $$result,
-            {
-              data: data_1,
-              form,
-              params: page.params,
-              this: components[1]
-            },
+            { data: data_1, form, this: components[1] },
             {
               this: ($$value) => {
                 components[1] = $$value;
@@ -64,12 +68,7 @@ const Root = create_ssr_component(($$result, $$props, $$bindings, slots) => {
       }
     )}` : `${validate_component(constructors[0] || missing_component, "svelte:component").$$render(
       $$result,
-      {
-        data: data_0,
-        form,
-        params: page.params,
-        this: components[0]
-      },
+      { data: data_0, form, this: components[0] },
       {
         this: ($$value) => {
           components[0] = $$value;
@@ -81,39 +80,49 @@ const Root = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   } while (!$$settled);
   return $$rendered;
 });
-let read_implementation = null;
+let base = "";
+let assets = base;
+const initial = { base, assets };
+function override(paths) {
+  base = paths.base;
+  assets = paths.assets;
+}
+function reset() {
+  base = initial.base;
+  assets = initial.assets;
+}
+function set_assets(path) {
+  assets = initial.assets = path;
+}
 function set_read_implementation(fn) {
-  read_implementation = fn;
 }
 function set_manifest(_) {
 }
-function set_env(env) {
-}
 let public_env = {};
+let safe_public_env = {};
 function set_private_env(environment) {
 }
 function set_public_env(environment) {
   public_env = environment;
 }
+function set_safe_public_env(environment) {
+  safe_public_env = environment;
+}
 const options = {
+  app_dir: "_app",
   app_template_contains_nonce: false,
-  async: false,
   csp: { "mode": "auto", "directives": { "upgrade-insecure-requests": false, "block-all-mixed-content": false }, "reportOnly": { "upgrade-insecure-requests": false, "block-all-mixed-content": false } },
   csrf_check_origin: true,
-  csrf_trusted_origins: [],
   embedded: false,
   env_public_prefix: "PUBLIC_",
   env_private_prefix: "",
-  hash_routing: false,
   hooks: null,
   // added lazily, via `get_hooks`
   preload_strategy: "modulepreload",
   root: Root,
   service_worker: false,
-  service_worker_options: void 0,
-  server_error_boundaries: false,
   templates: {
-    app: ({ head, body, assets, nonce, env }) => '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n    <meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1" />\n    <title>GeoModeler</title>\n    ' + head + '\n</head>\n<body data-sveltekit-prerender="true">\n    <div style="display: contents">' + body + "</div>\n</body>\n</html>\n",
+    app: ({ head, body, assets: assets2, nonce, env }) => '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n    <meta charset="utf-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1" />\n    <title>GeoModeler</title>\n    ' + head + '\n</head>\n<body data-sveltekit-prerender="true">\n    <div style="display: contents">' + body + "</div>\n</body>\n</html>\n",
     error: ({ status, message }) => '<!doctype html>\n<html lang="en">\n	<head>\n		<meta charset="utf-8" />\n		<title>' + message + `</title>
 
 		<style>
@@ -185,34 +194,27 @@ const options = {
 		<div class="error">
 			<span class="status">` + status + '</span>\n			<div class="message">\n				<h1>' + message + "</h1>\n			</div>\n		</div>\n	</body>\n</html>\n"
   },
-  version_hash: "fp2wrj"
+  version_hash: "tn6e5z"
 };
 async function get_hooks() {
-  let handle;
-  let handleFetch;
-  let handleError;
-  let handleValidationError;
-  let init;
-  let reroute;
-  let transport;
-  return {
-    handle,
-    handleFetch,
-    handleError,
-    handleValidationError,
-    init,
-    reroute,
-    transport
-  };
+  return {};
 }
 export {
-  set_public_env as a,
-  set_read_implementation as b,
-  set_env as c,
-  set_manifest as d,
+  assets as a,
+  base as b,
+  options as c,
+  set_private_env as d,
+  prerendering as e,
+  set_public_env as f,
   get_hooks as g,
-  options as o,
+  set_safe_public_env as h,
+  set_assets as i,
+  set_building as j,
+  set_manifest as k,
+  set_prerendering as l,
+  set_read_implementation as m,
+  override as o,
   public_env as p,
-  read_implementation as r,
-  set_private_env as s
+  reset as r,
+  safe_public_env as s
 };

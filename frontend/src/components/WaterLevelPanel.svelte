@@ -151,8 +151,43 @@
         }
     }
 
-    $: if (thresholdBoreholeId) {
-        autoFillThresholdForm(thresholdBoreholeId, $waterLevelThresholds, $boreholes, $waterLevelData);
+    $: if (thresholdBoreholeId && $waterLevelThresholds.length > 0) {
+        const existing = $waterLevelThresholds.find(t => t.borehole_id === thresholdBoreholeId);
+        if (existing) {
+            blueThreshold = existing.blue_threshold;
+            orangeThreshold = existing.orange_threshold;
+            redThreshold = existing.red_threshold;
+            currentThresholdId = existing.id;
+        } else {
+            const bh = $boreholes.find(b => b.id === thresholdBoreholeId);
+            if (bh && $waterLevelData.length > 0) {
+                const records = $waterLevelData.filter(r => r.borehole_id === thresholdBoreholeId).map(r => r.water_level);
+                if (records.length > 0) {
+                    const min = Math.min(...records);
+                    const max = Math.max(...records);
+                    const range = max - min;
+                    blueThreshold = (min + range * 0.5).toFixed(2);
+                    orangeThreshold = (min + range * 0.75).toFixed(2);
+                    redThreshold = (min + range * 0.95).toFixed(2);
+                } else {
+                    blueThreshold = '';
+                    orangeThreshold = '';
+                    redThreshold = '';
+                }
+            } else {
+                blueThreshold = '';
+                orangeThreshold = '';
+                redThreshold = '';
+            }
+            currentThresholdId = null;
+        }
+    }
+
+    $: if (!thresholdBoreholeId) {
+        blueThreshold = '';
+        orangeThreshold = '';
+        redThreshold = '';
+        currentThresholdId = null;
     }
 
     function autoFillThresholdForm(bhId, thresholds, boreholes, waterLevelData) {
@@ -539,7 +574,7 @@
     {:else if $waterLevelSubTab === 'thresholds'}
         <div class="form-group" style="margin-bottom:10px;">
             <label style="font-size:12px;">选择钻孔</label>
-            <select value={thresholdBoreholeId} on:change={(e) => { thresholdBoreholeId = e.target.value; }} style="width:100%;font-size:12px;">
+            <select bind:value={thresholdBoreholeId} style="width:100%;font-size:12px;">
                 <option value="">请选择钻孔</option>
                 {#each $boreholes as bh}
                     <option value={bh.id}>{bh.hole_id}</option>
