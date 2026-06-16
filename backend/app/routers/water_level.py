@@ -10,15 +10,19 @@ from app.models import Borehole, WaterLevel
 from app.schemas import (
     WaterLevelCreate, WaterLevelOut, WaterLevelCSVImportResult,
     WaterLevelStatsOut, MKTestResult, WaterLevelKrigingRequest,
+    WaterLevelThresholdCreate, WaterLevelThresholdUpdate, WaterLevelThresholdOut,
 )
 from app.crud import get_project
 from app.crud_water_level import (
     get_water_levels_for_borehole, get_water_levels_for_project,
     create_water_level, delete_water_level, import_water_level_csv,
+    get_thresholds_for_project, get_threshold_for_borehole,
+    create_threshold, update_threshold, delete_threshold,
+    get_warnings_for_project,
 )
 from app.services.water_level import (
     compute_statistics, mann_kendall_test, compute_boxplot_data,
-    kriging_water_level,
+    kriging_water_level, detect_anomalies,
 )
 
 router = APIRouter()
@@ -231,3 +235,122 @@ async def api_kriging_water_level(
         raise HTTPException(400, result["error"])
 
     return result
+
+
+@router.get("/{project_id}/water-levels/thresholds", response_model=list[WaterLevelThresholdOut])
+async def api_list_thresholds(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    project = await get_project(db, project_id)
+    if not project:
+        raise HTTPException(404, "项目不存在")
+    return await get_thresholds_for_project(db, project_id)
+
+
+@router.get("/{project_id}/water-levels/thresholds/{borehole_id}", response_model=WaterLevelThresholdOut)
+async def api_get_threshold(
+    project_id: UUID, borehole_id: UUID, db: AsyncSession = Depends(get_db),
+):
+    project = await get_project(db, project_id)
+    if not project:
+        raise HTTPException(404, "项目不存在")
+    threshold = await get_threshold_for_borehole(db, borehole_id)
+    if not threshold:
+        raise HTTPException(404, "该钻孔未设置预警阈值")
+    return threshold
+
+
+@router.post("/{project_id}/water-levels/thresholds", response_model=WaterLevelThresholdOut, status_code=201)
+async def api_create_threshold(
+    project_id: UUID, data: WaterLevelThresholdCreate, db: AsyncSession = Depends(get_db),
+):
+    project = await get_project(db, project_id)
+    if not project:
+        raise HTTPException(404, "项目不存在")
+
+    bh_result = await db.execute(
+        select(Borehole).where(Borehole.id == data.borehole_id, Borehole.project_id == project_id)
+    )
+    if not bh_result.scalar_one_or_none():
+        raise HTTPException(404, "钻孔不存在")
+
+    existing = await get_threshold_for_borehole(db, data.borehole_id)
+    if existing:
+        raise HTTPException(400, "该钻孔已设置预警阈值，请使用PUT接口更新")
+
+    try:
+        return await create_threshold(db, data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.put("/{project_id}/water-levels/thresholds/{threshold_id}", response_model=WaterLevelThresholdOut)
+async def api_update_threshold(
+    project_id: UUID, threshold_id: UUID, data: WaterLevelThresholdUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    project = await get_project(db, project_id)
+    if not project:
+        raise HTTPException(404, "项目不存在")
+
+    threshold = await update_threshold(db, threshold_id, data)
+    if not threshold:
+        raise HTTPException(404, "阈值配置不存在")
+    return threshold
+
+
+@router.delete("/{project_id}/water-levels/thresholds/{threshold_id}", status_code=204)
+async def api_delete_threshold(
+    project_id: UUID, threshold_id: UUID, db: AsyncSession = Depends(get_db),
+):
+    project = await get_project(db, project_id)
+    if not project:
+        raise HTTPException(404, "项目不存在")
+
+    if not await delete_threshold(db, threshold_id):
+        raise HTTPException(404, "阈值配置不存在")
+
+
+@router.post("/{project_id}/water-levels/anomalies")
+async def api_detect_anomalies(
+    project_id: UUID, borehole_ids: list[UUID], db: AsyncSession = Depends(get_db),
+):
+    project = await get_project(db, project_id)
+    if not project:
+        raise HTTPException(404, "项目不存在")
+
+    results = {}
+    for bh_id in borehole_ids:
+        bh_result = await db.execute(
+            select(Borehole).where(Borehole.id == bh_id, Borehole.project_id == project_id)
+        )
+        bh = bh_result.scalar_one_or_none()
+        if not bh:
+            continue
+
+        wl_result = await db.execute(
+            select(WaterLevel)
+            .where(WaterLevel.borehole_id == bh_id)
+            .order_by(WaterLevel.obs_date)
+        )
+        records = wl_result.scalars().all()
+
+        anomalies = detect_anomalies(records)
+        results[str(bh_id)] = {
+            "hole_id": bh.hole_id,
+            "anomalies": anomalies,
+        }
+
+    return results
+
+
+@router.get("/{project_id}/water-levels/warnings")
+async def api_get_warnings(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    project = await get_project(db, project_id)
+    if not project:
+        raise HTTPException(404, "项目不存在")
+    return await get_warnings_for_project(db, project_id)

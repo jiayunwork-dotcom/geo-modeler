@@ -136,3 +136,18 @@ class WaterLevel(Base):
     borehole = relationship("Borehole", back_populates="water_levels")
 
     __table_args__ = (UniqueConstraint("borehole_id", "obs_date"),)
+
+
+class WaterLevelThreshold(Base):
+    __tablename__ = "water_level_thresholds"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    borehole_id = Column(UUID(as_uuid=True), ForeignKey("boreholes.id", ondelete="CASCADE"), nullable=False)
+    blue_threshold = Column(Float, nullable=False)
+    orange_threshold = Column(Float, nullable=False)
+    red_threshold = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    borehole = relationship("Borehole")
+
+    __table_args__ = (UniqueConstraint("borehole_id"),)

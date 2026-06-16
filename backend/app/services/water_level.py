@@ -58,6 +58,12 @@ def compute_statistics(records: List[WaterLevel]) -> dict:
         amps = [max(v) - min(v) for v in annual_amplitudes.values() if len(v) >= 2]
         annual_amp = float(np.mean(amps)) if amps else 0.0
 
+    anomaly_count = None
+    if len(values) >= 10:
+        upper = mean_val + 2 * std_val
+        lower = mean_val - 2 * std_val
+        anomaly_count = int(np.sum((values > upper) | (values < lower)))
+
     return {
         "count": len(records),
         "mean": mean_val,
@@ -67,7 +73,47 @@ def compute_statistics(records: List[WaterLevel]) -> dict:
         "max_rise_days": max_rise,
         "max_fall_days": max_fall,
         "annual_amplitude": annual_amp,
+        "anomaly_count": anomaly_count,
     }
+
+
+def detect_anomalies(records: List[WaterLevel]) -> List[dict]:
+    if not records or len(records) < 10:
+        return []
+
+    sorted_records = sorted(records, key=lambda r: r.obs_date)
+    values = np.array([r.water_level for r in sorted_records])
+    mean_val = float(np.mean(values))
+    std_val = float(np.std(values, ddof=1)) if len(values) > 1 else 0.0
+
+    upper = mean_val + 2 * std_val
+    lower = mean_val - 2 * std_val
+
+    anomalies = []
+    for idx, r in enumerate(sorted_records):
+        if r.water_level > upper or r.water_level < lower:
+            deviation = r.water_level - mean_val
+            before_records = sorted_records[max(0, idx - 2):idx]
+            after_records = sorted_records[idx + 1:min(len(sorted_records), idx + 3)]
+            anomalies.append({
+                "id": str(r.id),
+                "obs_date": r.obs_date.isoformat(),
+                "water_level": r.water_level,
+                "water_temp": r.water_temp,
+                "conductivity": r.conductivity,
+                "deviation": float(deviation),
+                "deviation_pct": float(deviation / mean_val * 100) if mean_val != 0 else 0.0,
+                "is_upper": r.water_level > upper,
+                "before_records": [
+                    {"obs_date": br.obs_date.isoformat(), "water_level": br.water_level}
+                    for br in before_records
+                ],
+                "after_records": [
+                    {"obs_date": ar.obs_date.isoformat(), "water_level": ar.water_level}
+                    for ar in after_records
+                ],
+            })
+    return anomalies
 
 
 def mann_kendall_test(records: List[WaterLevel]) -> dict:

@@ -105,3 +105,15 @@ export const waterLevelPlaybackState = writable({
 
 export const waterLevelSubTab = writable('data');
 
+export const waterLevelThresholds = writable([]);
+
+export const waterLevelWarnings = writable([]);
+
+export const waterLevelAnomalies = writable({});
+
+export const selectedWaterLevelBoreholeId = writable('');
+
+export const multiCompareBoreholeIds = writable([]);
+
+export const showWarningPanel = writable(false);
+

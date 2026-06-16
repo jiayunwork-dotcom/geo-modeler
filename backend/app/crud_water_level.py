@@ -2,12 +2,12 @@ import csv
 import io
 import uuid
 from datetime import date, datetime
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete
 from sqlalchemy.orm import selectinload
-from app.models import Borehole, WaterLevel
-from app.schemas import WaterLevelCreate, WaterLevelCSVImportResult
+from app.models import Borehole, WaterLevel, WaterLevelThreshold
+from app.schemas import WaterLevelCreate, WaterLevelCSVImportResult, WaterLevelThresholdCreate, WaterLevelThresholdUpdate
 
 
 async def get_water_levels_for_borehole(
@@ -206,3 +206,123 @@ async def import_water_level_csv(
             errors.extend([f"第 {row_idx} 行: {e}" for e in wl_errors])
 
     return WaterLevelCSVImportResult(imported=imported, errors=errors, warnings=warnings)
+
+
+async def get_thresholds_for_project(
+    db: AsyncSession, project_id: uuid.UUID
+) -> List[WaterLevelThreshold]:
+    result = await db.execute(
+        select(WaterLevelThreshold)
+        .join(Borehole)
+        .where(Borehole.project_id == project_id)
+    )
+    return result.scalars().all()
+
+
+async def get_threshold_for_borehole(
+    db: AsyncSession, borehole_id: uuid.UUID
+) -> Optional[WaterLevelThreshold]:
+    result = await db.execute(
+        select(WaterLevelThreshold)
+        .where(WaterLevelThreshold.borehole_id == borehole_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_threshold(
+    db: AsyncSession, data: WaterLevelThresholdCreate
+) -> WaterLevelThreshold:
+    threshold = WaterLevelThreshold(
+        borehole_id=data.borehole_id,
+        blue_threshold=data.blue_threshold,
+        orange_threshold=data.orange_threshold,
+        red_threshold=data.red_threshold,
+    )
+    db.add(threshold)
+    await db.commit()
+    await db.refresh(threshold)
+    return threshold
+
+
+async def update_threshold(
+    db: AsyncSession, threshold_id: uuid.UUID, data: WaterLevelThresholdUpdate
+) -> Optional[WaterLevelThreshold]:
+    result = await db.execute(
+        select(WaterLevelThreshold).where(WaterLevelThreshold.id == threshold_id)
+    )
+    threshold = result.scalar_one_or_none()
+    if not threshold:
+        return None
+    threshold.blue_threshold = data.blue_threshold
+    threshold.orange_threshold = data.orange_threshold
+    threshold.red_threshold = data.red_threshold
+    await db.commit()
+    await db.refresh(threshold)
+    return threshold
+
+
+async def delete_threshold(
+    db: AsyncSession, threshold_id: uuid.UUID
+) -> bool:
+    result = await db.execute(
+        select(WaterLevelThreshold).where(WaterLevelThreshold.id == threshold_id)
+    )
+    threshold = result.scalar_one_or_none()
+    if not threshold:
+        return False
+    await db.delete(threshold)
+    await db.commit()
+    return True
+
+
+async def get_warnings_for_project(
+    db: AsyncSession, project_id: uuid.UUID
+) -> List[dict]:
+    bh_result = await db.execute(
+        select(Borehole).where(Borehole.project_id == project_id)
+    )
+    boreholes = bh_result.scalars().all()
+
+    warnings = []
+    for bh in boreholes:
+        threshold_result = await db.execute(
+            select(WaterLevelThreshold).where(WaterLevelThreshold.borehole_id == bh.id)
+        )
+        threshold = threshold_result.scalar_one_or_none()
+        if not threshold:
+            continue
+
+        wl_result = await db.execute(
+            select(WaterLevel)
+            .where(WaterLevel.borehole_id == bh.id)
+            .order_by(WaterLevel.obs_date.desc())
+        )
+        latest = wl_result.scalars().first()
+        if not latest:
+            continue
+
+        wl = latest.water_level
+        warning_level = None
+        exceed_amount = 0.0
+
+        if wl >= threshold.red_threshold:
+            warning_level = "red"
+            exceed_amount = wl - threshold.red_threshold
+        elif wl >= threshold.orange_threshold:
+            warning_level = "orange"
+            exceed_amount = wl - threshold.orange_threshold
+        elif wl >= threshold.blue_threshold:
+            warning_level = "blue"
+            exceed_amount = wl - threshold.blue_threshold
+
+        if warning_level:
+            warnings.append({
+                "borehole_id": str(bh.id),
+                "hole_id": bh.hole_id,
+                "latest_water_level": wl,
+                "warning_level": warning_level,
+                "exceed_amount": float(exceed_amount),
+                "obs_date": latest.obs_date.isoformat(),
+            })
+
+    return warnings

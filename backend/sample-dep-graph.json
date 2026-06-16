@@ -1,0 +1,16 @@
+{
+  "aws_subnet.public_a": [
+    "aws_vpc.main"
+  ],
+  "aws_subnet.public_b": [
+    "aws_vpc.main"
+  ],
+  "aws_security_group.web_sg": [
+    "aws_vpc.main"
+  ],
+  "aws_instance.web": [
+    "aws_subnet.public_a",
+    "aws_security_group.web_sg"
+  ],
+  "aws_s3_bucket.assets": []
+}

@@ -227,6 +227,7 @@ class WaterLevelStatsOut(BaseModel):
     max_rise_days: Optional[int] = None
     max_fall_days: Optional[int] = None
     annual_amplitude: Optional[float] = None
+    anomaly_count: Optional[int] = None
 
 
 class MKTestResult(BaseModel):
@@ -248,3 +249,50 @@ class WaterLevelKrigingRequest(BaseModel):
     variogram_model: str = "spherical"
     grid_nx: int = Field(50, ge=5, le=100)
     grid_ny: int = Field(50, ge=5, le=100)
+
+
+class WaterLevelThresholdBase(BaseModel):
+    blue_threshold: float = Field(..., description="蓝色预警阈值(水位偏高)")
+    orange_threshold: float = Field(..., description="橙色预警阈值(水位异常)")
+    red_threshold: float = Field(..., description="红色预警阈值(水位危险)")
+
+    @field_validator("orange_threshold")
+    @classmethod
+    def check_orange_gt_blue(cls, v, info):
+        if v <= info.data.get("blue_threshold", float("-inf")):
+            raise ValueError("橙色预警阈值必须大于蓝色预警阈值")
+        return v
+
+    @field_validator("red_threshold")
+    @classmethod
+    def check_red_gt_orange(cls, v, info):
+        if v <= info.data.get("orange_threshold", float("-inf")):
+            raise ValueError("红色预警阈值必须大于橙色预警阈值")
+        return v
+
+
+class WaterLevelThresholdCreate(WaterLevelThresholdBase):
+    borehole_id: UUID
+
+
+class WaterLevelThresholdUpdate(WaterLevelThresholdBase):
+    pass
+
+
+class WaterLevelThresholdOut(WaterLevelThresholdBase):
+    id: UUID
+    borehole_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class WarningInfo(BaseModel):
+    borehole_id: UUID
+    hole_id: str
+    latest_water_level: float
+    warning_level: str
+    exceed_amount: float
+    obs_date: date

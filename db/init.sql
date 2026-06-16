@@ -101,3 +101,16 @@ CREATE TABLE IF NOT EXISTS water_levels (
 
 CREATE INDEX idx_water_levels_borehole ON water_levels(borehole_id);
 CREATE INDEX idx_water_levels_date ON water_levels(obs_date);
+
+CREATE TABLE IF NOT EXISTS water_level_thresholds (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    borehole_id UUID NOT NULL REFERENCES boreholes(id) ON DELETE CASCADE,
+    blue_threshold DOUBLE PRECISION NOT NULL,
+    orange_threshold DOUBLE PRECISION NOT NULL,
+    red_threshold DOUBLE PRECISION NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(borehole_id)
+);
+
+CREATE INDEX idx_water_level_thresholds_borehole ON water_level_thresholds(borehole_id);

@@ -87,4 +87,25 @@ export default {
 
     krigingWaterLevel: (projectId, data) =>
         request('POST', `/projects/${projectId}/water-levels/kriging`, data),
+
+    getWaterLevelThresholds: (projectId) =>
+        request('GET', `/projects/${projectId}/water-levels/thresholds`),
+
+    getWaterLevelThreshold: (projectId, boreholeId) =>
+        request('GET', `/projects/${projectId}/water-levels/thresholds/${boreholeId}`),
+
+    createWaterLevelThreshold: (projectId, data) =>
+        request('POST', `/projects/${projectId}/water-levels/thresholds`, data),
+
+    updateWaterLevelThreshold: (projectId, thresholdId, data) =>
+        request('PUT', `/projects/${projectId}/water-levels/thresholds/${thresholdId}`, data),
+
+    deleteWaterLevelThreshold: (projectId, thresholdId) =>
+        request('DELETE', `/projects/${projectId}/water-levels/thresholds/${thresholdId}`),
+
+    detectWaterLevelAnomalies: (projectId, boreholeIds) =>
+        request('POST', `/projects/${projectId}/water-levels/anomalies`, boreholeIds),
+
+    getWaterLevelWarnings: (projectId) =>
+        request('GET', `/projects/${projectId}/water-levels/warnings`),
 };

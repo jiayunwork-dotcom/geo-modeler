@@ -6,7 +6,7 @@
         attributeField, attributeRendering, surfaceOverlay,
         boreholeWarnings, volumeCardData, volumeCardCollapsed,
         waterLevelContourResult, waterLevelContourVisible, waterLevelContourOpacity,
-        waterLevelIntersectionLine
+        waterLevelIntersectionLine, waterLevelWarnings, waterLevelThresholds,
     } from '../stores/index.js';
     import api from '../api/client.js';
 
@@ -15,6 +15,7 @@
     let layerMeshes = {};
     let boreholeMeshes = [];
     let warningMeshes = [];
+    let warningSphereMeshes = [];
     let clipPlaneObj = null;
     let attributeMesh = null;
     let surfaceMesh = null;
@@ -22,6 +23,7 @@
     let intersectionLineMesh = null;
     let animationId;
     let sceneReady = false;
+    let lastBlinkTime = 0;
 
     import * as THREE from 'three';
     import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -142,6 +144,12 @@
             }
         });
 
+        const unsubWLWarnings = waterLevelWarnings.subscribe(() => {
+            if (sceneReady) {
+                updateBoreholeCylinders($boreholes);
+            }
+        });
+
         return () => {
             unsubBoreholes();
             unsubModel();
@@ -156,6 +164,7 @@
             unsubWLVisible();
             unsubWLOpacity();
             unsubWLIntersect();
+            unsubWLWarnings();
             cancelAnimationFrame(animationId);
             renderer?.dispose();
         };
@@ -225,6 +234,17 @@
     function animate() {
         animationId = requestAnimationFrame(animate);
         controls?.update();
+
+        const now = Date.now();
+        if (now - lastBlinkTime >= 500) {
+            lastBlinkTime = now;
+            warningSphereMeshes.forEach(s => {
+                if (s?.material) {
+                    s.material.opacity = s.material.opacity > 0.5 ? 0.2 : 1.0;
+                }
+            });
+        }
+
         renderer?.render(scene, camera);
     }
 
@@ -299,11 +319,19 @@
     function updateBoreholeCylinders(bhs) {
         boreholeMeshes.forEach(m => { disposeMesh(m); });
         boreholeMeshes = [];
+        warningSphereMeshes.forEach(m => { disposeMesh(m); });
+        warningSphereMeshes = [];
 
         if (!bhs || bhs.length === 0) return;
 
         const coords = bhs.map(b => [b.longitude, b.latitude, b.elevation]);
         if (coords.length === 0) return;
+
+        const warningBoreholeIds = new Set($waterLevelWarnings.map(w => w.borehole_id));
+        const warningMap = {};
+        $waterLevelWarnings.forEach(w => {
+            warningMap[w.borehole_id] = w.warning_level;
+        });
 
         const lonMin = Math.min(...coords.map(c => c[0]));
         const latMin = Math.min(...coords.map(c => c[1]));
@@ -331,13 +359,26 @@
                 boreholeMeshes.push(mesh);
             });
 
+            const warningLevel = warningMap[bh.id];
+            let sphereColor = 0xffffff;
+            if (warningLevel === 'red') sphereColor = 0xf44336;
+            else if (warningLevel === 'orange') sphereColor = 0xff9800;
+            else if (warningLevel === 'blue') sphereColor = 0x2196f3;
+
             const topSphere = new THREE.Mesh(
                 new THREE.SphereGeometry(1.5, 16, 16),
-                new THREE.MeshPhongMaterial({ color: 0xffffff })
+                new THREE.MeshPhongMaterial({
+                    color: sphereColor,
+                    transparent: warningLevel ? true : false,
+                    opacity: 1.0,
+                })
             );
             topSphere.position.set(x, bh.elevation, z);
             scene.add(topSphere);
             boreholeMeshes.push(topSphere);
+            if (warningLevel) {
+                warningSphereMeshes.push(topSphere);
+            }
         });
     }
 

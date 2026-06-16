@@ -3,7 +3,9 @@
     import {
         currentProject, boreholes, lithologyTypes, profiles,
         modelRuns, toasts, activeTab, activeProfileData, addToast,
-        comparisonMode, comparisonLeftData, comparisonRightData
+        comparisonMode, comparisonLeftData, comparisonRightData,
+        waterLevelWarnings, waterLevelThresholds, waterLevelData,
+        waterLevelSubTab, selectedWaterLevelBoreholeId, showWarningPanel,
     } from './stores/index.js';
     import api from './api/client.js';
     import BoreholeManager from './components/BoreholeManager.svelte';
@@ -24,6 +26,8 @@
     let showNewProject = false;
     let newProjectName = '';
 
+    let warningRefreshInterval = null;
+
     onMount(async () => {
         try {
             projectList = await api.get('/projects');
@@ -33,6 +37,10 @@
         } catch (e) {
             console.error(e);
         }
+
+        warningRefreshInterval = setInterval(() => {
+            refreshWarnings();
+        }, 5000);
     });
 
     async function selectProject(id) {
@@ -50,9 +58,39 @@
             $lithologyTypes = lts;
             $profiles = pfs;
             $modelRuns = runs;
+
+            await refreshWarnings();
+            await refreshThresholds();
         } catch (e) {
             addToast(`加载项目失败: ${e.message}`, 'error');
         }
+    }
+
+    async function refreshWarnings() {
+        if (!$currentProject) return;
+        try {
+            const data = await api.getWaterLevelWarnings($currentProject.id);
+            $waterLevelWarnings = data;
+        } catch (e) {
+            console.warn('刷新预警失败:', e);
+        }
+    }
+
+    async function refreshThresholds() {
+        if (!$currentProject) return;
+        try {
+            const data = await api.getWaterLevelThresholds($currentProject.id);
+            $waterLevelThresholds = data;
+        } catch (e) {
+            console.warn('刷新阈值失败:', e);
+        }
+    }
+
+    function navigateToWarningBorehole(warning) {
+        $activeTab = 'waterlevel';
+        $waterLevelSubTab = 'history';
+        $selectedWaterLevelBoreholeId = warning.borehole_id;
+        $showWarningPanel = false;
     }
 
     async function createProject() {
@@ -77,6 +115,27 @@
         { id: 'attributes', label: '属性场', icon: '◇' },
         { id: 'export', label: '成果导出', icon: '↓' },
     ];
+
+    function getWarningLevelBadge(level) {
+        if (level === 'red') return 'bg-red-500';
+        if (level === 'orange') return 'bg-orange-500';
+        return 'bg-blue-500';
+    }
+
+    function getWarningLevelText(level) {
+        if (level === 'red') return '红色预警';
+        if (level === 'orange') return '橙色预警';
+        return '蓝色预警';
+    }
+
+    let groupedWarnings;
+    $: {
+        const groups = { red: [], orange: [], blue: [] };
+        $waterLevelWarnings.forEach(w => {
+            groups[w.warning_level].push(w);
+        });
+        groupedWarnings = groups;
+    }
 </script>
 
 <div class="app-layout">
@@ -103,6 +162,89 @@
         </div>
         <div class="header-right">
             <span class="info-text">钻孔: {$boreholes.length} | 岩性: {$lithologyTypes.length}</span>
+
+            {#if $waterLevelWarnings.length > 0}
+                <div class="warning-badge-container" style="position:relative;">
+                    <button
+                        class="warning-badge-btn"
+                        on:click={() => $showWarningPanel = !$showWarningPanel}
+                        title="水位预警"
+                    >
+                        ⚠️
+                        <span class="warning-count-badge">{$waterLevelWarnings.length}</span>
+                    </button>
+
+                    {#if $showWarningPanel}
+                        <div class="warning-panel" on:click|stopPropagation>
+                            <div class="warning-panel-header">
+                                <h4>水位预警摘要</h4>
+                                <button class="close-btn" on:click={() => $showWarningPanel = false}>×</button>
+                            </div>
+                            <div class="warning-panel-body">
+                                {#if groupedWarnings.red.length > 0}
+                                    <div class="warning-group">
+                                        <div class="warning-group-title red">
+                                            🔴 红色预警 ({groupedWarnings.red.length})
+                                        </div>
+                                        {#each groupedWarnings.red as w}
+                                            <div class="warning-item" on:click={() => navigateToWarningBorehole(w)}>
+                                                <div class="warning-item-header">
+                                                    <span class="warning-hole">{w.hole_id}</span>
+                                                    <span class="warning-exceed">超出 +{w.exceed_amount.toFixed(2)}m</span>
+                                                </div>
+                                                <div class="warning-item-details">
+                                                    <span>水位: {w.latest_water_level.toFixed(2)}m</span>
+                                                    <span>日期: {w.obs_date}</span>
+                                                </div>
+                                            </div>
+                                        {/each}
+                                    </div>
+                                {/if}
+
+                                {#if groupedWarnings.orange.length > 0}
+                                    <div class="warning-group">
+                                        <div class="warning-group-title orange">
+                                            🟠 橙色预警 ({groupedWarnings.orange.length})
+                                        </div>
+                                        {#each groupedWarnings.orange as w}
+                                            <div class="warning-item" on:click={() => navigateToWarningBorehole(w)}>
+                                                <div class="warning-item-header">
+                                                    <span class="warning-hole">{w.hole_id}</span>
+                                                    <span class="warning-exceed">超出 +{w.exceed_amount.toFixed(2)}m</span>
+                                                </div>
+                                                <div class="warning-item-details">
+                                                    <span>水位: {w.latest_water_level.toFixed(2)}m</span>
+                                                    <span>日期: {w.obs_date}</span>
+                                                </div>
+                                            </div>
+                                        {/each}
+                                    </div>
+                                {/if}
+
+                                {#if groupedWarnings.blue.length > 0}
+                                    <div class="warning-group">
+                                        <div class="warning-group-title blue">
+                                            🔵 蓝色预警 ({groupedWarnings.blue.length})
+                                        </div>
+                                        {#each groupedWarnings.blue as w}
+                                            <div class="warning-item" on:click={() => navigateToWarningBorehole(w)}>
+                                                <div class="warning-item-header">
+                                                    <span class="warning-hole">{w.hole_id}</span>
+                                                    <span class="warning-exceed">超出 +{w.exceed_amount.toFixed(2)}m</span>
+                                                </div>
+                                                <div class="warning-item-details">
+                                                    <span>水位: {w.latest_water_level.toFixed(2)}m</span>
+                                                    <span>日期: {w.obs_date}</span>
+                                                </div>
+                                            </div>
+                                        {/each}
+                                    </div>
+                                {/if}
+                            </div>
+                        </div>
+                    {/if}
+                </div>
+            {/if}
         </div>
     </header>
 
@@ -231,10 +373,164 @@
         display: flex;
         align-items: center;
         gap: 12px;
+        position: relative;
     }
 
     .info-text {
         font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .warning-badge-btn {
+        position: relative;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+
+    .warning-badge-btn:hover {
+        background: var(--bg-hover);
+    }
+
+    .warning-count-badge {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: #f44336;
+        color: white;
+        font-size: 10px;
+        font-weight: 700;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 4px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .warning-panel {
+        position: absolute;
+        top: 44px;
+        right: 0;
+        width: 320px;
+        max-height: 480px;
+        background: rgba(26, 29, 35, 0.98);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        z-index: 1000;
+        overflow: hidden;
+        backdrop-filter: blur(10px);
+    }
+
+    .warning-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .warning-panel-header h4 {
+        margin: 0;
+        font-size: 13px;
+        color: var(--text-primary);
+    }
+
+    .close-btn {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 18px;
+        cursor: pointer;
+        padding: 0 4px;
+        line-height: 1;
+    }
+
+    .close-btn:hover {
+        color: var(--text-primary);
+    }
+
+    .warning-panel-body {
+        padding: 8px;
+        overflow-y: auto;
+        max-height: 420px;
+    }
+
+    .warning-group {
+        margin-bottom: 10px;
+    }
+
+    .warning-group:last-child {
+        margin-bottom: 0;
+    }
+
+    .warning-group-title {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 6px 8px;
+        border-radius: 4px;
+        margin-bottom: 4px;
+    }
+
+    .warning-group-title.red {
+        background: rgba(244, 67, 54, 0.15);
+        color: #f44336;
+    }
+
+    .warning-group-title.orange {
+        background: rgba(255, 152, 0, 0.15);
+        color: #ff9800;
+    }
+
+    .warning-group-title.blue {
+        background: rgba(33, 150, 243, 0.15);
+        color: #2196f3;
+    }
+
+    .warning-item {
+        padding: 8px 10px;
+        margin: 2px 0;
+        background: var(--bg-tertiary);
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .warning-item:hover {
+        background: var(--bg-hover);
+        transform: translateX(2px);
+    }
+
+    .warning-item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 3px;
+    }
+
+    .warning-hole {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .warning-exceed {
+        font-size: 10px;
+        font-weight: 600;
+        color: #f44336;
+    }
+
+    .warning-item-details {
+        display: flex;
+        gap: 12px;
+        font-size: 10px;
         color: var(--text-muted);
     }
 

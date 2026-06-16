@@ -1,0 +1,52 @@
+{
+  "drifts": [
+    {
+      "fingerprint": "hash_001",
+      "resource_addr": "aws_vpc.main",
+      "drift_type": "modified",
+      "action_type": "apply",
+      "command": "terraform apply -target=aws_vpc.main -auto-approve",
+      "rollback_command": "terraform plan -destroy -target=aws_vpc.main"
+    },
+    {
+      "fingerprint": "hash_002",
+      "resource_addr": "aws_subnet.public_a",
+      "drift_type": "modified",
+      "action_type": "apply",
+      "command": "terraform apply -target=aws_subnet.public_a -auto-approve",
+      "rollback_command": "terraform plan -destroy -target=aws_subnet.public_a"
+    },
+    {
+      "fingerprint": "hash_003",
+      "resource_addr": "aws_subnet.public_b",
+      "drift_type": "modified",
+      "action_type": "apply",
+      "command": "terraform apply -target=aws_subnet.public_b -auto-approve",
+      "rollback_command": "terraform plan -destroy -target=aws_subnet.public_b"
+    },
+    {
+      "fingerprint": "hash_004",
+      "resource_addr": "aws_instance.web",
+      "drift_type": "missing",
+      "action_type": "apply",
+      "command": "terraform apply -target=aws_instance.web -auto-approve",
+      "rollback_command": "terraform plan -destroy -target=aws_instance.web"
+    },
+    {
+      "fingerprint": "hash_005",
+      "resource_addr": "aws_security_group.web_sg",
+      "drift_type": "modified",
+      "action_type": "apply",
+      "command": "terraform apply -target=aws_security_group.web_sg -auto-approve",
+      "rollback_command": "terraform plan -destroy -target=aws_security_group.web_sg"
+    },
+    {
+      "fingerprint": "hash_006",
+      "resource_addr": "aws_s3_bucket.assets",
+      "drift_type": "new_resource",
+      "action_type": "import",
+      "command": "terraform import aws_s3_bucket.assets my-bucket-assets",
+      "rollback_command": "terraform state rm aws_s3_bucket.assets"
+    }
+  ]
+}
