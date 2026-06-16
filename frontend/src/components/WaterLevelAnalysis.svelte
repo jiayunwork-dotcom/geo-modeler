@@ -665,19 +665,18 @@
                         ondblclick={onCompareDoubleClick}
                     ></canvas>
                     {#if tooltipData}
-                        {#const data = tooltipData}
                             <div
                                 class="compare-tooltip"
                                 style="
-                                    left: {Math.min(data.x + 12, compareCanvas.getBoundingClientRect().width - 180)}px;
+                                    left: {Math.min(tooltipData.x + 12, compareCanvas.getBoundingClientRect().width - 180)}px;
                                     top: 50px;
-                                    {data.x > compareCanvas.getBoundingClientRect().width / 2 ? 'transform: translateX(-100%); left: ' + (data.x - 12) + 'px;' : ''}
+                                    {tooltipData.x > compareCanvas.getBoundingClientRect().width / 2 ? 'transform: translateX(-100%); left: ' + (tooltipData.x - 12) + 'px;' : ''}
                                 "
                             >
                                 <div class="tooltip-date">
-                                    {data.date.getFullYear()}-{String(data.date.getMonth() + 1).padStart(2, '0')}-{String(data.date.getDate()).padStart(2, '0')}
+                                    {tooltipData.date.getFullYear()}-{String(tooltipData.date.getMonth() + 1).padStart(2, '0')}-{String(tooltipData.date.getDate()).padStart(2, '0')}
                                 </div>
-                                {#each data.data as d, i}
+                                {#each tooltipData.data as d, i}
                                     <div class="tooltip-row" style="color: {COMPARE_COLORS[i % COMPARE_COLORS.length]};">
                                         <span class="tooltip-hole">{d.hole_id}</span>
                                         <span class="tooltip-value">
@@ -686,7 +685,6 @@
                                     </div>
                                 {/each}
                             </div>
-                        {/if}
                     {/if}
                 </div>
                 <p style="font-size:10px;color:var(--text-muted);margin-top:6px;">

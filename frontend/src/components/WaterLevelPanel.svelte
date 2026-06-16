@@ -2,7 +2,8 @@
     import { onMount } from 'svelte';
     import {
         currentProject, boreholes, waterLevelData, waterLevelSubTab, addToast,
-        waterLevelThresholds, waterLevelAnomalies, selectedWaterLevelBoreholeId
+        waterLevelThresholds, waterLevelAnomalies, selectedWaterLevelBoreholeId,
+        waterLevelWarnings
     } from '../stores/index.js';
     import api from '../api/client.js';
 
@@ -30,8 +31,13 @@
     ];
 
     $: selectedBorehole = $boreholes.find(b => b.id === selectedBoreholeId);
-    $: selectedBoreholeId = $selectedWaterLevelBoreholeId || selectedBoreholeId;
-    $: $selectedWaterLevelBoreholeId = selectedBoreholeId;
+
+    let storeUnsub;
+
+    function onBoreholeSelectChange(e) {
+        selectedBoreholeId = e.target.value;
+        $selectedWaterLevelBoreholeId = selectedBoreholeId;
+    }
 
     async function refreshWaterLevels() {
         if (!$currentProject) return;
@@ -59,9 +65,8 @@
     async function refreshWarnings() {
         if (!$currentProject) return;
         try {
-            const { waterLevelWarnings } = await import('../stores/index.js');
             const data = await api.getWaterLevelWarnings($currentProject.id);
-            waterLevelWarnings.set(data);
+            $waterLevelWarnings = data;
         } catch (e) {
             console.warn('加载预警失败:', e);
         }
@@ -404,7 +409,15 @@
     }
 
     onMount(() => {
+        storeUnsub = selectedWaterLevelBoreholeId.subscribe(v => {
+            if (v && v !== selectedBoreholeId) {
+                selectedBoreholeId = v;
+            }
+        });
         refreshWaterLevels();
+        return () => {
+            if (storeUnsub) storeUnsub();
+        };
     });
 
     let waterLevelsByBorehole;
@@ -441,7 +454,7 @@
     {#if $waterLevelSubTab === 'data'}
         <div class="form-group" style="margin-bottom:10px;">
             <label style="font-size:12px;">筛选钻孔</label>
-            <select bind:value={selectedBoreholeId} style="width:100%;font-size:12px;">
+            <select value={selectedBoreholeId} on:change={onBoreholeSelectChange} style="width:100%;font-size:12px;">
                 <option value="">全部钻孔</option>
                 {#each $boreholes as bh}
                     <option value={bh.id}>{bh.hole_id}</option>
@@ -497,7 +510,7 @@
     {:else if $waterLevelSubTab === 'history'}
         <div class="form-group" style="margin-bottom:10px;">
             <label style="font-size:12px;">选择钻孔</label>
-            <select bind:value={selectedBoreholeId} style="width:100%;font-size:12px;">
+            <select value={selectedBoreholeId} on:change={onBoreholeSelectChange} style="width:100%;font-size:12px;">
                 <option value="">请选择钻孔</option>
                 {#each $boreholes as bh}
                     <option value={bh.id}>{bh.hole_id} ({(waterLevelsByBorehole[bh.id] || []).length}条)</option>
@@ -556,7 +569,7 @@
                     {/if}
                 </div>
                 <p style="font-size:11px;color:var(--text-muted);margin-top:8px;">
-                    业务规则: 蓝色 < 橙色 < 红色
+                    业务规则: 蓝色 &lt; 橙色 &lt; 红色
                 </p>
             </div>
         {/if}
@@ -579,6 +592,7 @@
             </div>
         </div>
     {/if}
+{/if}
 </div>
 
 {#if showImport}
