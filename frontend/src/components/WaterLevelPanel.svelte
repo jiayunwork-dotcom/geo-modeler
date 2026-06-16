@@ -32,7 +32,12 @@
 
     $: selectedBorehole = $boreholes.find(b => b.id === selectedBoreholeId);
 
-    let storeUnsub;
+    $: {
+        const storeVal = $selectedWaterLevelBoreholeId;
+        if (storeVal && storeVal !== selectedBoreholeId) {
+            selectedBoreholeId = storeVal;
+        }
+    }
 
     function onBoreholeSelectChange(e) {
         selectedBoreholeId = e.target.value;
@@ -146,18 +151,21 @@
         }
     }
 
-    async function loadThresholdForBorehole(bhId) {
-        thresholdBoreholeId = bhId;
-        const existing = $waterLevelThresholds.find(t => t.borehole_id === bhId);
+    $: if (thresholdBoreholeId) {
+        autoFillThresholdForm(thresholdBoreholeId, $waterLevelThresholds, $boreholes, $waterLevelData);
+    }
+
+    function autoFillThresholdForm(bhId, thresholds, boreholes, waterLevelData) {
+        const existing = thresholds.find(t => t.borehole_id === bhId);
         if (existing) {
             blueThreshold = existing.blue_threshold;
             orangeThreshold = existing.orange_threshold;
             redThreshold = existing.red_threshold;
             currentThresholdId = existing.id;
         } else {
-            const bh = $boreholes.find(b => b.id === bhId);
+            const bh = boreholes.find(b => b.id === bhId);
             if (bh) {
-                const records = $waterLevelData.filter(r => r.borehole_id === bhId).map(r => r.water_level);
+                const records = waterLevelData.filter(r => r.borehole_id === bhId).map(r => r.water_level);
                 if (records.length > 0) {
                     const min = Math.min(...records);
                     const max = Math.max(...records);
@@ -173,6 +181,10 @@
             }
             currentThresholdId = null;
         }
+    }
+
+    async function loadThresholdForBorehole(bhId) {
+        thresholdBoreholeId = bhId;
     }
 
     async function saveThreshold() {
@@ -409,15 +421,7 @@
     }
 
     onMount(() => {
-        storeUnsub = selectedWaterLevelBoreholeId.subscribe(v => {
-            if (v && v !== selectedBoreholeId) {
-                selectedBoreholeId = v;
-            }
-        });
         refreshWaterLevels();
-        return () => {
-            if (storeUnsub) storeUnsub();
-        };
     });
 
     let waterLevelsByBorehole;
@@ -535,7 +539,7 @@
     {:else if $waterLevelSubTab === 'thresholds'}
         <div class="form-group" style="margin-bottom:10px;">
             <label style="font-size:12px;">选择钻孔</label>
-            <select bind:value={thresholdBoreholeId} on:change={(e) => loadThresholdForBorehole(e.target.value)} style="width:100%;font-size:12px;">
+            <select value={thresholdBoreholeId} on:change={(e) => { thresholdBoreholeId = e.target.value; }} style="width:100%;font-size:12px;">
                 <option value="">请选择钻孔</option>
                 {#each $boreholes as bh}
                     <option value={bh.id}>{bh.hole_id}</option>

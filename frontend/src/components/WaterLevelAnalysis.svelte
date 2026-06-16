@@ -665,14 +665,16 @@
                         ondblclick={onCompareDoubleClick}
                     ></canvas>
                     {#if tooltipData}
-                            <div
-                                class="compare-tooltip"
-                                style="
-                                    left: {Math.min(tooltipData.x + 12, compareCanvas.getBoundingClientRect().width - 180)}px;
-                                    top: 50px;
-                                    {tooltipData.x > compareCanvas.getBoundingClientRect().width / 2 ? 'transform: translateX(-100%); left: ' + (tooltipData.x - 12) + 'px;' : ''}
-                                "
-                            >
+                        {@const canvasRect = compareCanvas.getBoundingClientRect()}
+                        {@const tooltipMaxWidth = 220}
+                        {@const showOnLeft = tooltipData.x > canvasRect.width / 2}
+                        {@const leftPos = showOnLeft
+                            ? Math.max(4, tooltipData.x - tooltipMaxWidth - 12)
+                            : Math.min(canvasRect.width - tooltipMaxWidth - 4, tooltipData.x + 12)}
+                        <div
+                            class="compare-tooltip"
+                            style="left: {leftPos}px; top: 50px; max-width: {tooltipMaxWidth}px;"
+                        >
                                 <div class="tooltip-date">
                                     {tooltipData.date.getFullYear()}-{String(tooltipData.date.getMonth() + 1).padStart(2, '0')}-{String(tooltipData.date.getDate()).padStart(2, '0')}
                                 </div>
@@ -821,6 +823,9 @@
         z-index: 100;
         min-width: 140px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        box-sizing: border-box;
+        overflow-wrap: break-word;
+        word-break: break-word;
     }
 
     .tooltip-date {
